@@ -108,10 +108,14 @@ const ActivityLogger = () => {
     }
   };
 
+  // Initial page load only.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadSchoolData();
   }, []);
 
+  // Runs when selected batch changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedBatchId) {
       loadBatchStudents(selectedBatchId);
@@ -120,6 +124,8 @@ const ActivityLogger = () => {
     }
   }, [selectedBatchId]);
 
+  // Refresh recent activity when selected student changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadRecentActivities({ studentId: form.studentId, batchId: selectedBatchId });
   }, [form.studentId]);

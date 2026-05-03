@@ -97,10 +97,14 @@ const AttendanceMarker = () => {
     }
   };
 
+  // Initial page load only.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadSchoolData();
   }, []);
 
+  // Refresh batch attendance when batch/date changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedBatchId && selectedDate) {
       loadBatchAttendance(selectedBatchId, selectedDate);

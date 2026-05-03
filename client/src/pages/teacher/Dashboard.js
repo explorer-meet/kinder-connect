@@ -91,6 +91,8 @@ export default function TeacherDashboard() {
     setTimeout(() => setToast(null), 4000);
   };
 
+  // Initial dashboard bootstrap only.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadCirculars();
     loadBatches();

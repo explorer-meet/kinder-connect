@@ -5,7 +5,7 @@ import useAuthStore from '../../store/authStore';
 import {
   FaCamera, FaBook, FaClipboardList, FaCalendarAlt,
   FaArrowRight, FaShuttleVan, FaPlus, FaTimes, FaCheck, FaBan,
-  FaClock, FaUpload, FaBullhorn, FaChild, FaHome, FaBars, FaSignOutAlt,
+  FaClock, FaUpload, FaBullhorn, FaChild, FaHome, FaSignOutAlt,
   FaChevronRight, FaMapMarkerAlt, FaUser,
 } from 'react-icons/fa';
 
@@ -105,6 +105,8 @@ export default function ParentDashboard() {
     Promise.all([fetchChildren(), fetchCirculars(), fetchPickupRequests()]);
   }, []);
 
+  // Intentionally scoped to route-state changes for section transitions.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     const requestedSection = location.state?.section;
     if (requestedSection && NAV.some((item) => item.id === requestedSection)) {
@@ -119,6 +121,8 @@ export default function ParentDashboard() {
     }
   }, [location.state]);
 
+  // Intentionally triggered only when pending action and load state change.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!pendingChildAction || loading) return;
     handleChildAction(pendingChildAction);
