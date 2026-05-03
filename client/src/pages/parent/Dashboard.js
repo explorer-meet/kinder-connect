@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
 import useAuthStore from '../../store/authStore';
@@ -101,34 +101,6 @@ export default function ParentDashboard() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  useEffect(() => {
-    Promise.all([fetchChildren(), fetchCirculars(), fetchPickupRequests()]);
-  }, []);
-
-  // Intentionally scoped to route-state changes for section transitions.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    const requestedSection = location.state?.section;
-    if (requestedSection && NAV.some((item) => item.id === requestedSection)) {
-      if (CHILD_ACTIONS[requestedSection]) {
-        setPendingChildAction(requestedSection);
-        return;
-      }
-      setActiveSection(requestedSection);
-      if (requestedSection === 'ptm') {
-        loadPtmData();
-      }
-    }
-  }, [location.state]);
-
-  // Intentionally triggered only when pending action and load state change.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (!pendingChildAction || loading) return;
-    handleChildAction(pendingChildAction);
-    setPendingChildAction(null);
-  }, [pendingChildAction, loading]);
-
   const fetchChildren = async () => {
     try {
       setLoading(true);
@@ -159,32 +131,32 @@ export default function ParentDashboard() {
     }
   };
 
-  const fetchPtmSlots = async () => {
+  const fetchPtmSlots = useCallback(async () => {
     try {
       const res = await api.get('/parent/ptm/slots');
       setPtmSlots(res.data || []);
     } catch {
       setPtmSlots([]);
     }
-  };
+  }, []);
 
-  const fetchPtmRequests = async () => {
+  const fetchPtmRequests = useCallback(async () => {
     try {
       const res = await api.get('/parent/ptm/requests');
       setPtmRequests(res.data || []);
     } catch {
       setPtmRequests([]);
     }
-  };
+  }, []);
 
-  const loadPtmData = async () => {
+  const loadPtmData = useCallback(async () => {
     setLoadingPtm(true);
     try {
       await Promise.all([fetchPtmSlots(), fetchPtmRequests()]);
     } finally {
       setLoadingPtm(false);
     }
-  };
+  }, [fetchPtmSlots, fetchPtmRequests]);
 
   const handlePickupPhotoUpload = async (e) => {
     const file = e.target.files[0];
@@ -236,7 +208,7 @@ export default function ParentDashboard() {
     setSidebarOpen(false);
   };
 
-  const handleChildAction = (actionKey) => {
+  const handleChildAction = useCallback((actionKey) => {
     const action = CHILD_ACTIONS[actionKey];
     if (!action) return;
     if (loading) {
@@ -254,7 +226,31 @@ export default function ParentDashboard() {
     }
     setChildPickerAction(actionKey);
     setSidebarOpen(false);
-  };
+  }, [loading, children, navigate]);
+
+  useEffect(() => {
+    Promise.all([fetchChildren(), fetchCirculars(), fetchPickupRequests()]);
+  }, []);
+
+  useEffect(() => {
+    const requestedSection = location.state?.section;
+    if (requestedSection && NAV.some((item) => item.id === requestedSection)) {
+      if (CHILD_ACTIONS[requestedSection]) {
+        setPendingChildAction(requestedSection);
+        return;
+      }
+      setActiveSection(requestedSection);
+      if (requestedSection === 'ptm') {
+        loadPtmData();
+      }
+    }
+  }, [location.state, loadPtmData]);
+
+  useEffect(() => {
+    if (!pendingChildAction || loading) return;
+    handleChildAction(pendingChildAction);
+    setPendingChildAction(null);
+  }, [pendingChildAction, loading, handleChildAction]);
 
   const handleChildPick = (childId) => {
     const action = childPickerAction ? CHILD_ACTIONS[childPickerAction] : null;

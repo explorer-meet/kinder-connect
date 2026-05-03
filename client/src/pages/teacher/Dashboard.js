@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
 import useAuthStore from '../../store/authStore';
@@ -91,14 +91,6 @@ export default function TeacherDashboard() {
     setTimeout(() => setToast(null), 4000);
   };
 
-  // Initial dashboard bootstrap only.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    loadCirculars();
-    loadBatches();
-    loadProfile();
-  }, []);
-
   useEffect(() => {
     const requestedSection = location.state?.section;
     if (requestedSection && NAV.some((item) => item.id === requestedSection)) {
@@ -106,16 +98,16 @@ export default function TeacherDashboard() {
     }
   }, [location.state]);
 
-  const loadCirculars = async () => {
+  const loadCirculars = useCallback(async () => {
     try {
       const res = await api.get('/schooladmin/circulars/feed');
       setCirculars(res.data || []);
     } catch {
       setCirculars([]);
     }
-  };
+  }, []);
 
-  const loadProfile = async () => {
+  const loadProfile = useCallback(async () => {
     try {
       const res = await api.get('/teacher/profile');
       const p = res.data;
@@ -139,7 +131,7 @@ export default function TeacherDashboard() {
     } catch {
       // silently ignore
     }
-  };
+  }, [updateUser]);
 
   const handleProfilePhotoUpload = async (e) => {
     const file = e.target.files[0];
@@ -206,24 +198,7 @@ export default function TeacherDashboard() {
     }
   };
 
-  const loadBatches = async () => {
-    try {
-      const res = await api.get('/teacher/attendance/data');
-      const allBatches = (res.data?.classes || []).flatMap((cls) =>
-        (cls.batches || []).map((b) => ({
-          ...b,
-          displayName: `${cls.name}${cls.section ? ` (${cls.section})` : ''} — ${b.shiftName || 'Batch'}`,
-        }))
-      );
-      setBatches(allBatches);
-      loadClassNotes('', allBatches);
-    } catch {
-      setBatches([]);
-      setClassNotes([]);
-    }
-  };
-
-  const loadClassNotes = async (batchId, sourceBatches = batches) => {
+  const loadClassNotes = useCallback(async (batchId, sourceBatches = []) => {
     setLoadingNotes(true);
     try {
       let notes = [];
@@ -255,7 +230,30 @@ export default function TeacherDashboard() {
     } finally {
       setLoadingNotes(false);
     }
-  };
+  }, []);
+
+  const loadBatches = useCallback(async () => {
+    try {
+      const res = await api.get('/teacher/attendance/data');
+      const allBatches = (res.data?.classes || []).flatMap((cls) =>
+        (cls.batches || []).map((b) => ({
+          ...b,
+          displayName: `${cls.name}${cls.section ? ` (${cls.section})` : ''} — ${b.shiftName || 'Batch'}`,
+        }))
+      );
+      setBatches(allBatches);
+      loadClassNotes('', allBatches);
+    } catch {
+      setBatches([]);
+      setClassNotes([]);
+    }
+  }, [loadClassNotes]);
+
+  useEffect(() => {
+    loadCirculars();
+    loadBatches();
+    loadProfile();
+  }, [loadCirculars, loadBatches, loadProfile]);
 
   const handleNoteFormChange = (field, value) => {
     setNoteForm((p) => ({ ...p, [field]: value }));
@@ -284,7 +282,7 @@ export default function TeacherDashboard() {
       setNoteForm((p) => ({ ...p, title: '', content: '' }));
       setShowPostForm(false);
       if (filterBatchId) loadClassNotes(filterBatchId);
-      else loadClassNotes('');
+      else loadClassNotes('', batches);
     } catch (err) {
       showToast('error', err.response?.data?.error || 'Could not post note.');
     } finally {

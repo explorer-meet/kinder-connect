@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import TeacherPortalLayout from '../../components/TeacherPortalLayout';
 import api from '../../api/api';
 import { FaBook, FaUpload, FaSave, FaImage, FaVideo } from 'react-icons/fa';
@@ -51,12 +51,12 @@ const ActivityLogger = () => {
     );
   }, [schoolData]);
 
-  const showMsg = (type, text) => {
+  const showMsg = useCallback((type, text) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3500);
-  };
+  }, []);
 
-  const loadSchoolData = async () => {
+  const loadSchoolData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get('/teacher/attendance/data');
@@ -71,9 +71,9 @@ const ActivityLogger = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showMsg]);
 
-  const loadBatchStudents = async (batchId) => {
+  const loadBatchStudents = useCallback(async (batchId) => {
     if (!batchId) return;
     setLoading(true);
     try {
@@ -86,9 +86,9 @@ const ActivityLogger = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showMsg]);
 
-  const loadRecentActivities = async ({ studentId, batchId }) => {
+  const loadRecentActivities = useCallback(async ({ studentId, batchId }) => {
     try {
       if (studentId) {
         const res = await api.get(`/activities/student/${studentId}`);
@@ -106,29 +106,23 @@ const ActivityLogger = () => {
     } catch (err) {
       setRecentActivities([]);
     }
-  };
-
-  // Initial page load only.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    loadSchoolData();
   }, []);
 
-  // Runs when selected batch changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    loadSchoolData();
+  }, [loadSchoolData]);
+
   useEffect(() => {
     if (selectedBatchId) {
       loadBatchStudents(selectedBatchId);
       setForm((prev) => ({ ...prev, batchId: selectedBatchId, studentId: '' }));
       loadRecentActivities({ studentId: '', batchId: selectedBatchId });
     }
-  }, [selectedBatchId]);
+  }, [selectedBatchId, loadBatchStudents, loadRecentActivities]);
 
-  // Refresh recent activity when selected student changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadRecentActivities({ studentId: form.studentId, batchId: selectedBatchId });
-  }, [form.studentId]);
+  }, [form.studentId, selectedBatchId, loadRecentActivities]);
 
   const uploadMedia = async () => {
     if (!selectedFile) return null;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import TeacherPortalLayout from '../../components/TeacherPortalLayout';
 import api from '../../api/api';
 import { FaClipboardList, FaSave, FaCheckCircle } from 'react-icons/fa';
@@ -44,12 +44,12 @@ const AttendanceMarker = () => {
     return rows;
   }, [schoolData]);
 
-  const showMsg = (type, text) => {
+  const showMsg = useCallback((type, text) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3500);
-  };
+  }, []);
 
-  const loadSchoolData = async () => {
+  const loadSchoolData = useCallback(async () => {
     setLoading(true);
     try {
       const res = await api.get('/teacher/attendance/data');
@@ -64,9 +64,9 @@ const AttendanceMarker = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showMsg]);
 
-  const loadBatchAttendance = async (batchId, date) => {
+  const loadBatchAttendance = useCallback(async (batchId, date) => {
     if (!batchId || !date) return;
     setLoading(true);
     try {
@@ -95,21 +95,17 @@ const AttendanceMarker = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showMsg]);
 
-  // Initial page load only.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     loadSchoolData();
-  }, []);
+  }, [loadSchoolData]);
 
-  // Refresh batch attendance when batch/date changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (selectedBatchId && selectedDate) {
       loadBatchAttendance(selectedBatchId, selectedDate);
     }
-  }, [selectedBatchId, selectedDate]);
+  }, [selectedBatchId, selectedDate, loadBatchAttendance]);
 
   const setAllStatus = (status) => {
     const next = { ...attendanceMap };
