@@ -6,7 +6,7 @@ import {
   FaCamera, FaBook, FaClipboardList, FaCalendarAlt,
   FaArrowRight, FaShuttleVan, FaPlus, FaTimes, FaCheck, FaBan,
   FaClock, FaUpload, FaBullhorn, FaChild, FaHome, FaBars, FaSignOutAlt,
-  FaChevronRight,
+  FaChevronRight, FaMapMarkerAlt, FaUser,
 } from 'react-icons/fa';
 
 const NAV = [
@@ -15,10 +15,20 @@ const NAV = [
   { id: 'activity',  label: 'Activity Feed',   icon: FaCamera },
   { id: 'attendance',label: 'Attendance',       icon: FaClipboardList },
   { id: 'report',    label: 'Development',      icon: FaBook },
-  { id: 'ptm',       label: 'Book PTM',         icon: FaCalendarAlt },
+  { id: 'ptm',       label: 'PTM Schedule',     icon: FaCalendarAlt },
   { id: 'pickup',    label: 'Pickup / Drop',    icon: FaShuttleVan },
   { id: 'circulars', label: 'Circulars',        icon: FaBullhorn },
 ];
+
+const NAV_ICON_STYLES = {
+  home: { tone: 'text-blue-500', soft: 'bg-blue-50' },
+  activity: { tone: 'text-cyan-500', soft: 'bg-cyan-50' },
+  attendance: { tone: 'text-indigo-500', soft: 'bg-indigo-50' },
+  report: { tone: 'text-violet-500', soft: 'bg-violet-50' },
+  ptm: { tone: 'text-amber-500', soft: 'bg-amber-50' },
+  pickup: { tone: 'text-orange-500', soft: 'bg-orange-50' },
+  circulars: { tone: 'text-fuchsia-500', soft: 'bg-fuchsia-50' },
+};
 
 const AVATAR_COLORS = [
   'from-violet-500 to-purple-600',
@@ -32,6 +42,15 @@ const statusBadge = (status) => {
   if (status === 'approved') return 'bg-emerald-100 text-emerald-700';
   if (status === 'rejected') return 'bg-red-100 text-red-700';
   return 'bg-amber-100 text-amber-700';
+};
+
+const circularTypeStyle = (type) => {
+  const value = String(type || 'general').toLowerCase();
+  if (value === 'event') return 'bg-cyan-50 text-cyan-700 border-cyan-100';
+  if (value === 'holiday') return 'bg-emerald-50 text-emerald-700 border-emerald-100';
+  if (value === 'notice') return 'bg-amber-50 text-amber-700 border-amber-100';
+  if (value === 'fee') return 'bg-rose-50 text-rose-700 border-rose-100';
+  return 'bg-violet-50 text-violet-700 border-violet-100';
 };
 
 const CHILD_ACTIONS = {
@@ -62,12 +81,20 @@ export default function ParentDashboard() {
   const [pickupRequests, setPickupRequests] = useState([]);
   const [toast, setToast] = useState(null);
   const [childPickerAction, setChildPickerAction] = useState(null);
+  const [pendingChildAction, setPendingChildAction] = useState(null);
   const [expandedCircular, setExpandedCircular] = useState(null);
 
   const [showPickupForm, setShowPickupForm] = useState(false);
   const [pickupForm, setPickupForm] = useState({ studentId: '', personName: '', mobileNumber: '', photoUrl: '' });
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
+
+  const [ptmSlots, setPtmSlots] = useState([]);
+  const [ptmRequests, setPtmRequests] = useState([]);
+  const [loadingPtm, setLoadingPtm] = useState(false);
+  const [showPtmRequestForm, setShowPtmRequestForm] = useState(false);
+  const [submittingPtmRequest, setSubmittingPtmRequest] = useState(false);
+  const [ptmRequestForm, setPtmRequestForm] = useState({ studentId: '', preferredDate: '', requestNotes: '' });
 
   const showToast = (type, text) => {
     setToast({ type, text });
@@ -81,9 +108,22 @@ export default function ParentDashboard() {
   useEffect(() => {
     const requestedSection = location.state?.section;
     if (requestedSection && NAV.some((item) => item.id === requestedSection)) {
+      if (CHILD_ACTIONS[requestedSection]) {
+        setPendingChildAction(requestedSection);
+        return;
+      }
       setActiveSection(requestedSection);
+      if (requestedSection === 'ptm') {
+        loadPtmData();
+      }
     }
   }, [location.state]);
+
+  useEffect(() => {
+    if (!pendingChildAction || loading) return;
+    handleChildAction(pendingChildAction);
+    setPendingChildAction(null);
+  }, [pendingChildAction, loading]);
 
   const fetchChildren = async () => {
     try {
@@ -112,6 +152,33 @@ export default function ParentDashboard() {
       setPickupRequests(res.data || []);
     } catch {
       setPickupRequests([]);
+    }
+  };
+
+  const fetchPtmSlots = async () => {
+    try {
+      const res = await api.get('/parent/ptm/slots');
+      setPtmSlots(res.data || []);
+    } catch {
+      setPtmSlots([]);
+    }
+  };
+
+  const fetchPtmRequests = async () => {
+    try {
+      const res = await api.get('/parent/ptm/requests');
+      setPtmRequests(res.data || []);
+    } catch {
+      setPtmRequests([]);
+    }
+  };
+
+  const loadPtmData = async () => {
+    setLoadingPtm(true);
+    try {
+      await Promise.all([fetchPtmSlots(), fetchPtmRequests()]);
+    } finally {
+      setLoadingPtm(false);
     }
   };
 
@@ -157,7 +224,8 @@ export default function ParentDashboard() {
     }
     if (section === 'ptm') {
       setSidebarOpen(false);
-      navigate('/parent/ptm');
+      setActiveSection('ptm');
+      loadPtmData();
       return;
     }
     setActiveSection(section);
@@ -189,6 +257,27 @@ export default function ParentDashboard() {
     if (!action) return;
     setChildPickerAction(null);
     navigate(action.getPath(childId));
+  };
+
+  const handlePtmRequestSubmit = async (e) => {
+    e.preventDefault();
+    if (!ptmRequestForm.studentId) {
+      showToast('error', 'Please select a child for the PTM request.');
+      return;
+    }
+
+    setSubmittingPtmRequest(true);
+    try {
+      await api.post('/parent/ptm/request', ptmRequestForm);
+      showToast('success', 'PTM request sent to school admin for approval.');
+      setPtmRequestForm({ studentId: '', preferredDate: '', requestNotes: '' });
+      setShowPtmRequestForm(false);
+      loadPtmData();
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Unable to submit PTM request');
+    } finally {
+      setSubmittingPtmRequest(false);
+    }
   };
 
   const pendingPickups = pickupRequests.filter((r) => r.status === 'pending').length;
@@ -230,6 +319,7 @@ export default function ParentDashboard() {
       <nav className="flex-1 overflow-y-auto py-4 px-3">
         {NAV.map(({ id, label, icon: Icon }) => {
           const active = activeSection === id;
+          const iconTheme = NAV_ICON_STYLES[id] || { tone: 'text-gray-500', soft: 'bg-gray-100' };
           return (
             <button
               key={id}
@@ -240,7 +330,9 @@ export default function ParentDashboard() {
                   : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
             >
-              <Icon className={active ? 'text-white' : 'text-gray-400'} />
+              <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-white/20' : iconTheme.soft}`}>
+                <Icon className={active ? 'text-white' : iconTheme.tone} />
+              </span>
               {label}
               {id === 'pickup' && pendingPickups > 0 && (
                 <span className="ml-auto bg-amber-400 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">{pendingPickups}</span>
@@ -277,34 +369,41 @@ export default function ParentDashboard() {
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Children', value: children.length, color: 'bg-blue-50 border-blue-100', text: 'text-blue-700', icon: FaChild },
-          { label: 'Circulars', value: circulars.length, color: 'bg-violet-50 border-violet-100', text: 'text-violet-700', icon: FaBullhorn },
-          { label: 'Pending Pickups', value: pendingPickups, color: 'bg-amber-50 border-amber-100', text: 'text-amber-700', icon: FaShuttleVan },
-          { label: 'Total Requests', value: pickupRequests.length, color: 'bg-emerald-50 border-emerald-100', text: 'text-emerald-700', icon: FaCalendarAlt },
-        ].map(({ label, value, color, text, icon: Icon }) => (
-          <div key={label} className={`rounded-2xl border p-4 ${color}`}>
+          { label: 'Children', value: children.length, color: 'bg-blue-50 border-blue-100', text: 'text-blue-700', icon: FaChild, onClick: () => go('children') },
+          { label: 'Circulars', value: circulars.length, color: 'bg-violet-50 border-violet-100', text: 'text-violet-700', icon: FaBullhorn, onClick: () => go('circulars') },
+          { label: 'Pending Pickups', value: pendingPickups, color: 'bg-amber-50 border-amber-100', text: 'text-amber-700', icon: FaShuttleVan, onClick: () => go('pickup') },
+          { label: 'Total Requests', value: pickupRequests.length, color: 'bg-emerald-50 border-emerald-100', text: 'text-emerald-700', icon: FaCalendarAlt, onClick: () => go('pickup') },
+        ].map(({ label, value, color, text, icon: Icon, onClick }) => (
+          <button
+            key={label}
+            type="button"
+            onClick={onClick}
+            className={`rounded-2xl border p-4 text-left transition-all hover:shadow-sm hover:-translate-y-0.5 ${color}`}
+          >
             <div className={`text-2xl font-bold ${text}`}>{value}</div>
             <div className="flex items-center gap-1.5 mt-1">
               <Icon className={`text-xs ${text}`} />
               <span className={`text-xs font-medium ${text}`}>{label}</span>
             </div>
-          </div>
+          </button>
         ))}
       </div>
 
       {/* Quick actions */}
       <div>
         <h3 className="font-semibold text-gray-700 mb-3">Quick Actions</h3>
-        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {[
             { label: 'Activity Feed', icon: FaCamera, section: 'activity', color: 'from-blue-400 to-blue-600' },
             { label: 'Development', icon: FaBook, section: 'report', color: 'from-violet-400 to-violet-600' },
             { label: 'Attendance', icon: FaClipboardList, section: 'attendance', color: 'from-emerald-400 to-emerald-600' },
-            { label: 'Book PTM', icon: FaCalendarAlt, section: 'ptm', color: 'from-amber-400 to-orange-500' },
+            { label: 'PTM Schedule', icon: FaCalendarAlt, section: 'ptm', color: 'from-amber-400 to-orange-500' },
           ].map(({ label, icon: Icon, section, color }) => (
-            <button key={label} onClick={() => go(section)} className={`rounded-2xl bg-gradient-to-br ${color} text-white p-4 flex flex-col items-center gap-2 shadow hover:shadow-lg hover:scale-105 transition-all`}>
-              <Icon className="text-2xl" />
-              <span className="text-xs font-semibold text-center">{label}</span>
+            <button key={label} onClick={() => go(section)} className={`rounded-2xl bg-gradient-to-br ${color} text-white p-5 min-h-[120px] flex flex-col items-start justify-between text-left shadow hover:shadow-lg hover:scale-[1.02] transition-all`}>
+              <span className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center">
+                <Icon className="text-xl" />
+              </span>
+              <span className="text-sm font-semibold leading-snug">{label}</span>
             </button>
           ))}
         </div>
@@ -457,26 +556,38 @@ export default function ParentDashboard() {
         <div className="space-y-3">
           {circulars.map((c) => {
             const isExpanded = expandedCircular === c.id;
+            const publishedOn = new Date(c.publishDate || c.createdAt);
             return (
-              <div key={c.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4">
+              <div key={c.id} className="bg-white rounded-2xl border border-violet-100 shadow-sm px-5 py-4 hover:shadow-md transition-shadow">
                 <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center shrink-0 mt-0.5">
-                    <FaBullhorn className="text-violet-500" />
+                  <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 mt-0.5 shadow">
+                    <FaBullhorn className="text-white" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-800">{c.title}</p>
-                    <p className={`text-sm text-gray-600 mt-1 ${isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-3'}`}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className={`text-[11px] border px-2.5 py-1 rounded-full font-semibold uppercase tracking-wide ${circularTypeStyle(c.circularType)}`}>
+                        {c.circularType || 'general'}
+                      </span>
+                      <span className="text-[11px] text-gray-400">School-wide</span>
+                      <span className="text-[11px] text-gray-400 ml-auto">Published: {publishedOn.toLocaleDateString()}</span>
+                    </div>
+
+                    <p className="font-semibold text-gray-800 mt-2">{c.title}</p>
+                    <p className={`text-sm text-gray-600 mt-1 leading-6 ${isExpanded ? 'whitespace-pre-wrap' : 'line-clamp-3'}`}>
                       {c.description}
                     </p>
+
                     {c.content && isExpanded && (
-                      <p className="text-sm text-gray-600 mt-2 whitespace-pre-wrap border-t border-gray-100 pt-2">{c.content}</p>
+                      <div className="mt-3 rounded-xl bg-gray-50 border border-gray-100 p-3">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Detailed Circular</p>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap leading-6">{c.content}</p>
+                      </div>
                     )}
+
                     <div className="flex items-center gap-3 mt-2 flex-wrap">
-                      <span className="text-xs bg-violet-50 text-violet-600 px-2 py-0.5 rounded-full font-medium capitalize">{c.circularType || 'general'}</span>
-                      <span className="text-xs text-gray-400">{new Date(c.publishDate || c.createdAt).toLocaleDateString()}</span>
                       <button
                         onClick={() => setExpandedCircular(isExpanded ? null : c.id)}
-                        className="text-xs text-blue-500 hover:underline ml-auto"
+                        className="text-xs text-indigo-600 hover:underline ml-auto font-semibold"
                       >
                         {isExpanded ? 'Show less' : 'Read more'}
                       </button>
@@ -491,11 +602,190 @@ export default function ParentDashboard() {
     </div>
   );
 
+  const ptmStatusColors = {
+    scheduled: 'bg-blue-100 text-blue-700',
+    completed: 'bg-emerald-100 text-emerald-700',
+    cancelled: 'bg-red-100 text-red-700',
+  };
+
+  const renderPtm = () => {
+    const approvedRequests = ptmRequests
+      .filter((request) => request.status === 'approved' && request.meetingDate)
+      .map((request) => ({
+        slotId: request.id,
+        sessionDate: request.meetingDate,
+        startTime: request.startTime,
+        endTime: request.endTime,
+        status: request.status,
+        studentName: request.studentName,
+        teacherName: request.teacherName,
+        location: request.location,
+        notes: request.adminNotes || request.requestNotes,
+      }));
+    const pendingRequests = ptmRequests.filter((request) => request.status === 'pending');
+    const rejectedRequests = ptmRequests.filter((request) => request.status === 'rejected');
+    const scheduledMeetings = [...ptmSlots, ...approvedRequests];
+    const now = new Date();
+    const upcoming = scheduledMeetings.filter((s) => s.status !== 'cancelled' && new Date(s.sessionDate) >= now);
+    const past = scheduledMeetings.filter((s) => s.status === 'completed' || new Date(s.sessionDate) < now);
+
+    const SlotCard = ({ slot }) => (
+      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 flex gap-4 items-start">
+        <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+          <FaCalendarAlt className="text-amber-500" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="font-semibold text-gray-800">
+              {new Date(slot.sessionDate).toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
+            </p>
+            <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${ptmStatusColors[slot.status] || 'bg-gray-100 text-gray-600'}`}>
+              {slot.status}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 text-sm text-amber-600 mt-1">
+            <FaClock size={11} />
+            <span>{slot.startTime} - {slot.endTime}</span>
+          </div>
+          <div className="flex flex-wrap gap-3 mt-2">
+            {slot.studentName && (
+              <span className="text-xs text-gray-500 flex items-center gap-1">
+                <FaChild size={10} /> {slot.studentName}
+              </span>
+            )}
+            {slot.teacherName && (
+              <span className="text-xs text-gray-500 flex items-center gap-1">
+                <FaUser size={10} /> {slot.teacherName}
+              </span>
+            )}
+            {slot.location && (
+              <span className="text-xs text-gray-400 flex items-center gap-1">
+                <FaMapMarkerAlt size={10} /> {slot.location}
+              </span>
+            )}
+          </div>
+          {slot.notes && <p className="text-xs text-gray-400 italic mt-1">{slot.notes}</p>}
+        </div>
+      </div>
+    );
+
+    return (
+      <div className="space-y-6 w-full">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <FaCalendarAlt className="text-amber-500" /> PTM Schedule
+          </h2>
+          <button onClick={() => setShowPtmRequestForm((value) => !value)} className="btn btn-primary btn-sm flex items-center gap-2">
+            {showPtmRequestForm ? <FaTimes size={12} /> : <FaPlus size={12} />}
+            {showPtmRequestForm ? 'Cancel' : 'Request PTM'}
+          </button>
+        </div>
+
+        {showPtmRequestForm && (
+          <div className="bg-white rounded-2xl border border-amber-100 shadow-sm p-5 space-y-4">
+            <p className="font-semibold text-gray-800">Request a PTM</p>
+            <form onSubmit={handlePtmRequestSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <select className="input" value={ptmRequestForm.studentId} onChange={(e) => setPtmRequestForm((prev) => ({ ...prev, studentId: e.target.value }))} required>
+                <option value="">Select Child</option>
+                {children.map((child) => (
+                  <option key={child.id} value={child.id}>{child.firstName} {child.lastName}</option>
+                ))}
+              </select>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Preferred Date (optional)</label>
+                <input className="input w-full" type="date" value={ptmRequestForm.preferredDate} onChange={(e) => setPtmRequestForm((prev) => ({ ...prev, preferredDate: e.target.value }))} />
+              </div>
+              <textarea className="input md:col-span-2 resize-none" rows={3} placeholder="Tell the school what you want to discuss or your preferred timing" value={ptmRequestForm.requestNotes} onChange={(e) => setPtmRequestForm((prev) => ({ ...prev, requestNotes: e.target.value }))} />
+              <button type="submit" disabled={submittingPtmRequest} className="btn btn-primary w-full md:w-auto flex items-center gap-2">
+                {submittingPtmRequest ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <FaCalendarAlt />}
+                {submittingPtmRequest ? 'Sending…' : 'Send Request'}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {loadingPtm ? (
+          <div className="flex justify-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-amber-400" /></div>
+        ) : scheduledMeetings.length === 0 && ptmRequests.length === 0 ? (
+          <div className="rounded-2xl border-2 border-dashed border-gray-200 p-12 text-center">
+            <FaCalendarAlt className="mx-auto text-4xl text-gray-200 mb-3" />
+            <p className="text-gray-400 text-sm">No PTM meetings scheduled yet.</p>
+            <p className="text-gray-300 text-xs mt-1">Request a PTM or wait for the school to approve and schedule one here.</p>
+          </div>
+        ) : (
+          <>
+            {pendingRequests.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Pending Requests ({pendingRequests.length})
+                </p>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                  {pendingRequests.map((request) => (
+                    <div key={request.id} className="bg-white rounded-2xl border border-amber-100 shadow-sm p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold text-gray-800">{request.studentName}</p>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">pending</span>
+                      </div>
+                      {request.preferredDate && <p className="text-sm text-gray-500 mt-1">Preferred Date: {new Date(request.preferredDate).toLocaleDateString('en-IN')}</p>}
+                      {request.requestNotes && <p className="text-sm text-gray-600 mt-2">{request.requestNotes}</p>}
+                      <p className="text-xs text-gray-400 mt-2">Requested on {new Date(request.createdAt).toLocaleDateString('en-IN')}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {upcoming.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Upcoming ({upcoming.length})
+                </p>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                  {upcoming.map((s) => <SlotCard key={s.slotId} slot={s} />)}
+                </div>
+              </div>
+            )}
+            {past.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Past / Completed ({past.length})
+                </p>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3 opacity-70">
+                  {past.map((s) => <SlotCard key={s.slotId} slot={s} />)}
+                </div>
+              </div>
+            )}
+
+            {rejectedRequests.length > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Rejected Requests ({rejectedRequests.length})
+                </p>
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                  {rejectedRequests.map((request) => (
+                    <div key={request.id} className="bg-white rounded-2xl border border-red-100 shadow-sm p-4">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold text-gray-800">{request.studentName}</p>
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">rejected</span>
+                      </div>
+                      {request.adminNotes && <p className="text-sm text-gray-600 mt-2">{request.adminNotes}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
   const renderSection = () => {
     if (activeSection === 'home') return renderHome();
     if (activeSection === 'children') return renderChildren();
     if (activeSection === 'pickup') return renderPickup();
     if (activeSection === 'circulars') return renderCirculars();
+    if (activeSection === 'ptm') return renderPtm();
     return null;
   };
 
@@ -543,27 +833,6 @@ export default function ParentDashboard() {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar */}
-        <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shrink-0">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-500 hover:text-gray-700 p-1">
-            <FaBars size={18} />
-          </button>
-          <div className="flex-1">
-            <h1 className="font-bold text-gray-800 text-base capitalize">{NAV.find((n) => n.id === activeSection)?.label || 'Dashboard'}</h1>
-          </div>
-          <div className="flex items-center gap-3">
-            {pendingPickups > 0 && (
-              <button onClick={() => go('pickup')} className="relative text-amber-500 hover:text-amber-600">
-                <FaShuttleVan size={18} />
-                <span className="absolute -top-1.5 -right-1.5 bg-amber-400 text-white text-[10px] rounded-full w-4 h-4 flex items-center justify-center font-bold">{pendingPickups}</span>
-              </button>
-            )}
-            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold">
-              {user?.firstName?.[0]}{user?.lastName?.[0]}
-            </div>
-          </div>
-        </header>
-
         {/* Toast */}
         {toast && (
           <div className={`mx-4 mt-3 px-4 py-3 rounded-xl text-sm font-medium flex items-center justify-between gap-3 shrink-0 ${toast.type === 'success' ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-700'}`}>

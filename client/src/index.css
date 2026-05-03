@@ -91,6 +91,62 @@ body {
   }
 }
 
+@keyframes landingReveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes floatSlow {
+  0%, 100% {
+    transform: translateY(0px) translateX(0px);
+  }
+  50% {
+    transform: translateY(-18px) translateX(10px);
+  }
+}
+
+@keyframes floatDrift {
+  0%, 100% {
+    transform: translateY(0px) translateX(0px);
+  }
+  50% {
+    transform: translateY(14px) translateX(-14px);
+  }
+}
+
+@keyframes stickerFloatA {
+  0%, 100% {
+    transform: translateY(0px) rotate(-1deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+
+@keyframes stickerFloatB {
+  0%, 100% {
+    transform: translateY(0px) rotate(1deg);
+  }
+  50% {
+    transform: translateY(8px) rotate(-1deg);
+  }
+}
+
+@keyframes marqueeSlide {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
 /* Component Layer */
 @layer components {
   /* Buttons */
@@ -252,3 +308,86 @@ body {
     animation: slideInDown 0.3s ease-out;
   }
 }
+
+  .landing-reveal {
+    animation: landingReveal 0.7s ease-out both;
+  }
+
+  .landing-reveal-delay-1 {
+    animation-delay: 0.12s;
+  }
+
+  .landing-reveal-delay-2 {
+    animation-delay: 0.24s;
+  }
+
+  .landing-reveal-delay-3 {
+    animation-delay: 0.36s;
+  }
+
+  .landing-reveal-delay-4 {
+    animation-delay: 0.48s;
+  }
+
+  .landing-orb-a {
+    animation: floatSlow 11s ease-in-out infinite;
+  }
+
+  .landing-orb-b {
+    animation: floatDrift 13s ease-in-out infinite;
+  }
+
+  .landing-orb-c {
+    animation: floatSlow 15s ease-in-out infinite;
+  }
+
+  .landing-sticker-float-a {
+    animation: stickerFloatA 5.5s ease-in-out infinite;
+  }
+
+  .landing-sticker-float-b {
+    animation: stickerFloatB 6.5s ease-in-out infinite;
+  }
+
+  .landing-sticker-float-c {
+    animation: stickerFloatA 7.2s ease-in-out infinite;
+  }
+
+  .landing-sticker-float-d {
+    animation: stickerFloatB 5.8s ease-in-out infinite;
+  }
+
+  .landing-chip {
+    animation: stickerFloatA 8s ease-in-out infinite;
+  }
+
+  .landing-marquee-track {
+    animation: marqueeSlide 20s linear infinite;
+    width: max-content;
+  }
+
+  @media (max-width: 768px) {
+    .landing-marquee-track {
+      animation-duration: 26s;
+    }
+
+    .landing-chip {
+      animation: none;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .landing-orb-a,
+    .landing-orb-b,
+    .landing-orb-c,
+    .landing-sticker-float-a,
+    .landing-sticker-float-b,
+    .landing-sticker-float-c,
+    .landing-sticker-float-d,
+    .landing-chip,
+    .landing-marquee-track,
+    .landing-reveal {
+      animation: none !important;
+      transform: none !important;
+    }
+  }

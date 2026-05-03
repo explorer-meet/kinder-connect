@@ -1,4 +1,5 @@
 const express = require('express');
+const bcrypt = require('bcryptjs');
 const { auth, authorize } = require('../middleware/auth');
 const ActivityLog = require('../models/ActivityLog');
 const Attendance = require('../models/Attendance');
@@ -10,6 +11,65 @@ const Class = require('../models/Class');
 const prisma = require('../src/lib/prisma');
 
 const router = express.Router();
+
+// ===== Teacher Profile =====
+
+router.get('/profile', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: {
+        id: true, firstName: true, lastName: true, email: true, phone: true,
+        photo: true, address: true, qualification: true, dateOfJoining: true,
+        emergencyContactName: true, emergencyContactPhone: true,
+        createdAt: true,
+      },
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.put('/profile', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const { firstName, lastName, phone, address, qualification, dateOfJoining,
+      emergencyContactName, emergencyContactPhone, photo, currentPassword, newPassword } = req.body;
+
+    const updateData = {};
+    if (firstName !== undefined) updateData.firstName = firstName;
+    if (lastName !== undefined) updateData.lastName = lastName;
+    if (phone !== undefined) updateData.phone = phone;
+    if (address !== undefined) updateData.address = address;
+    if (qualification !== undefined) updateData.qualification = qualification;
+    if (dateOfJoining !== undefined) updateData.dateOfJoining = dateOfJoining ? new Date(dateOfJoining) : null;
+    if (emergencyContactName !== undefined) updateData.emergencyContactName = emergencyContactName;
+    if (emergencyContactPhone !== undefined) updateData.emergencyContactPhone = emergencyContactPhone;
+    if (photo !== undefined) updateData.photo = photo;
+
+    if (newPassword) {
+      if (!currentPassword) return res.status(400).json({ error: 'Current password required to set a new password' });
+      const existing = await prisma.user.findUnique({ where: { id: req.userId }, select: { password: true } });
+      const match = await bcrypt.compare(currentPassword, existing.password);
+      if (!match) return res.status(400).json({ error: 'Current password is incorrect' });
+      updateData.password = await bcrypt.hash(newPassword, 10);
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: updateData,
+      select: {
+        id: true, firstName: true, lastName: true, email: true, phone: true,
+        photo: true, address: true, qualification: true, dateOfJoining: true,
+        emergencyContactName: true, emergencyContactPhone: true,
+      },
+    });
+    res.json({ message: 'Profile updated', user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ===== Prisma Attendance APIs (Teacher) =====
 
@@ -316,6 +376,125 @@ router.get('/class/:classId', auth, authorize(['teacher']), async (req, res) => 
     }
     
     res.json(classObj);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== PTM Routes (Teacher) =====
+
+// GET /teacher/ptm/sessions — list sessions created by this teacher
+router.get('/ptm/sessions', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const sessions = await prisma.pTMSession.findMany({
+      where: { teacherId: req.userId },
+      include: { slots: true },
+      orderBy: { sessionDate: 'desc' },
+    });
+
+    const studentIds = [...new Set(
+      sessions.flatMap((session) => (session.slots || []).map((slot) => slot.studentId)).filter(Boolean)
+    )];
+
+    let studentNameMap = {};
+    if (studentIds.length > 0) {
+      const students = await prisma.student.findMany({
+        where: { id: { in: studentIds } },
+        select: { id: true, firstName: true, lastName: true },
+      });
+
+      studentNameMap = Object.fromEntries(
+        students.map((student) => [student.id, `${student.firstName || ''} ${student.lastName || ''}`.trim()])
+      );
+    }
+
+    const enrichedSessions = sessions.map((session) => ({
+      ...session,
+      slots: (session.slots || []).map((slot) => ({
+        ...slot,
+        studentName: studentNameMap[slot.studentId] || 'Unknown Student',
+      })),
+    }));
+
+    res.json(enrichedSessions);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /teacher/ptm/session — create a PTM session with auto-generated 15-min slots
+router.post('/ptm/session', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const { batchId, sessionDate, startTime, location, notes, studentIds } = req.body;
+    if (!batchId || !sessionDate || !startTime || !Array.isArray(studentIds) || studentIds.length === 0) {
+      return res.status(400).json({ error: 'batchId, sessionDate, startTime and studentIds are required' });
+    }
+
+    const teacher = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!teacher?.schoolId) return res.status(400).json({ error: 'Teacher not linked to a school' });
+
+    // Generate 15-min slots starting from startTime
+    const parseTime = (t) => {
+      const [time, period] = t.trim().split(' ');
+      let [h, m] = time.split(':').map(Number);
+      if (period === 'PM' && h !== 12) h += 12;
+      if (period === 'AM' && h === 12) h = 0;
+      return h * 60 + m;
+    };
+    const formatTime = (mins) => {
+      const h24 = Math.floor(mins / 60) % 24;
+      const m = mins % 60;
+      const period = h24 >= 12 ? 'PM' : 'AM';
+      const h12 = h24 % 12 || 12;
+      return `${String(h12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
+    };
+
+    let cursor = parseTime(startTime);
+    const slotsData = studentIds.map((studentId) => {
+      const slot = { studentId, startTime: formatTime(cursor), endTime: formatTime(cursor + 15) };
+      cursor += 15;
+      return slot;
+    });
+
+    const session = await prisma.pTMSession.create({
+      data: {
+        teacherId: req.userId,
+        batchId,
+        schoolId: teacher.schoolId,
+        sessionDate: new Date(sessionDate),
+        location: location || null,
+        notes: notes || null,
+        slots: { create: slotsData },
+      },
+      include: { slots: true },
+    });
+
+    res.status(201).json(session);
+  } catch (err) {
+    console.error('PTM session create error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /teacher/ptm/slot/:slotId — update slot status
+router.patch('/ptm/slot/:slotId', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const { status } = req.body;
+    const slot = await prisma.pTMSlot.update({
+      where: { id: req.params.slotId },
+      data: { status },
+    });
+    res.json(slot);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /teacher/ptm/session/:sessionId — delete a session and all slots
+router.delete('/ptm/session/:sessionId', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    await prisma.pTMSession.delete({ where: { id: req.params.sessionId, teacherId: req.userId } });
+    res.json({ message: 'Session deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

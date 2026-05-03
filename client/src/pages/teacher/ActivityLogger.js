@@ -3,7 +3,10 @@ import TeacherPortalLayout from '../../components/TeacherPortalLayout';
 import api from '../../api/api';
 import { FaBook, FaUpload, FaSave, FaImage, FaVideo } from 'react-icons/fa';
 
-const ACTIVITY_TYPES = ['general', 'respective'];
+const ACTIVITY_TYPES = [
+  { value: 'general', label: 'General' },
+  { value: 'respective', label: 'Respective' },
+];
 
 const fileToDataUrl = (file) =>
   new Promise((resolve, reject) => {
@@ -227,14 +230,14 @@ const ActivityLogger = () => {
               </div>
 
               <div>
-                <label className="label">Student {form.activityType === 'respective' ? '*' : '(optional for general)'}</label>
+                <label className="label">Student {form.activityType === 'respective' ? '*' : '(Optional for General)'}</label>
                 <select
                   className="input"
                   value={form.studentId}
                   onChange={(e) => setForm((prev) => ({ ...prev, studentId: e.target.value }))}
                   required={form.activityType === 'respective'}
                 >
-                  <option value="">{form.activityType === 'general' ? 'No specific student (all parents in batch)' : 'Select student'}</option>
+                  <option value="">{form.activityType === 'general' ? 'No Specific Student (All Parents in Batch)' : 'Select Student'}</option>
                   {students.map((s) => (
                     <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>
                   ))}
@@ -249,8 +252,8 @@ const ActivityLogger = () => {
                   onChange={(e) => setForm((prev) => ({ ...prev, activityType: e.target.value }))}
                   required
                 >
-                  {ACTIVITY_TYPES.map((t) => (
-                    <option key={t} value={t}>{t}</option>
+                  {ACTIVITY_TYPES.map(({ value, label }) => (
+                    <option key={value} value={value}>{label}</option>
                   ))}
                 </select>
               </div>

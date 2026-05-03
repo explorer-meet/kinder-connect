@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import {
+  FaAppleAlt,
   FaArrowRight,
   FaBell,
   FaBookOpen,
@@ -12,7 +13,9 @@ import {
   FaComments,
   FaHeart,
   FaLayerGroup,
+  FaPuzzlePiece,
   FaShieldAlt,
+  FaStar,
   FaUserFriends,
 } from 'react-icons/fa';
 
@@ -96,20 +99,39 @@ const trustPoints = [
   'Simple enough for daily use, rich enough for school-wide visibility',
 ];
 
+const playfulStickers = [
+  { icon: FaStar, label: 'Creativity', tone: 'from-[#fef3c7] to-[#fed7aa]', text: 'text-[#b45309]', motion: 'landing-sticker-float-a' },
+  { icon: FaPuzzlePiece, label: 'Discovery', tone: 'from-[#dbeafe] to-[#bfdbfe]', text: 'text-[#1d4ed8]', motion: 'landing-sticker-float-b' },
+  { icon: FaAppleAlt, label: 'Healthy Habits', tone: 'from-[#dcfce7] to-[#bbf7d0]', text: 'text-[#15803d]', motion: 'landing-sticker-float-c' },
+  { icon: FaChild, label: 'Happy Kids', tone: 'from-[#ffe4e6] to-[#fecdd3]', text: 'text-[#be123c]', motion: 'landing-sticker-float-d' },
+];
+
+const playfulHighlights = [
+  { icon: FaBookOpen, text: 'Story circle moments' },
+  { icon: FaPuzzlePiece, text: 'Hands-on play tasks' },
+  { icon: FaStar, text: 'Milestone cheer-ups' },
+  { icon: FaBell, text: 'Parent-ready updates' },
+  { icon: FaCalendarCheck, text: 'Routine that feels calm' },
+  { icon: FaHeart, text: 'Care-first communication' },
+];
+
 export default function LandingPage() {
   return (
-    <div className="landing-page min-h-screen overflow-hidden bg-[#f7f4ec] text-slate-900">
+    <div className="landing-page min-h-screen overflow-x-hidden bg-[#f7f4ec] text-slate-900">
       <div className="landing-mesh pointer-events-none absolute inset-0 opacity-90" />
+      <div className="pointer-events-none absolute -left-20 top-20 h-72 w-72 rounded-full bg-cyan-300/20 blur-3xl landing-orb-a" />
+      <div className="pointer-events-none absolute right-0 top-1/3 h-72 w-72 rounded-full bg-orange-300/20 blur-3xl landing-orb-b" />
+      <div className="pointer-events-none absolute bottom-16 left-1/3 h-56 w-56 rounded-full bg-emerald-300/20 blur-3xl landing-orb-c" />
 
-      <header className="relative z-10 px-4 pt-5 sm:px-6 lg:px-10">
-        <div className="mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/60 bg-white/70 px-4 py-3 backdrop-blur-xl sm:px-6">
+      <header className="relative z-10 px-4 pt-5 sm:px-6 lg:px-10 landing-reveal">
+        <div className="mx-auto flex max-w-7xl flex-col gap-3 rounded-3xl border border-white/60 bg-white/70 px-4 py-3 backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:rounded-full sm:px-6">
           <div className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-[#0f766e] via-[#1d4ed8] to-[#f97316] text-lg font-bold text-white shadow-lg shadow-cyan-900/20">
               KC
             </div>
             <div>
               <div className="text-sm font-semibold uppercase tracking-[0.25em] text-slate-500">Kinder Connect</div>
-              <div className="text-sm text-slate-700">Modern operations for early childhood schools</div>
+              <div className="hidden text-sm text-slate-700 sm:block">Modern operations for early childhood schools</div>
             </div>
           </div>
 
@@ -118,20 +140,20 @@ export default function LandingPage() {
               Sign In
             </Link>
             <Link to="/register" className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-800">
-              Get Started <FaArrowRight className="text-xs" />
+              Register School <FaArrowRight className="text-xs" />
             </Link>
           </div>
         </div>
       </header>
 
       <main className="relative z-10 px-4 pb-16 pt-8 sm:px-6 lg:px-10 lg:pb-24 lg:pt-10">
-        <section className="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12">
+        <section className="mx-auto grid max-w-7xl items-start gap-10 lg:grid-cols-[1.1fr_0.9fr] lg:gap-12 landing-reveal landing-reveal-delay-1">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-[#fdba74] bg-[#fff4e6] px-4 py-2 text-sm font-semibold text-[#c2410c] shadow-sm">
               <FaHeart /> Built for warm, well-run school experiences
             </div>
 
-            <h1 className="mt-6 max-w-4xl font-display text-5xl font-bold leading-[0.95] tracking-[-0.04em] text-slate-950 sm:text-6xl lg:text-7xl">
+            <h1 className="mt-6 max-w-4xl font-display text-4xl font-bold leading-[0.98] tracking-[-0.04em] text-slate-950 sm:text-6xl lg:text-7xl">
               The kinder school platform that feels as thoughtful as the care you provide.
             </h1>
 
@@ -141,7 +163,7 @@ export default function LandingPage() {
 
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link to="/register" className="inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#0f766e] via-[#1d4ed8] to-[#f97316] px-7 py-4 text-base font-semibold text-white shadow-2xl shadow-cyan-900/20 transition hover:-translate-y-0.5">
-                Launch Kinder Connect <FaArrowRight className="text-sm" />
+                Get Started For School <FaArrowRight className="text-sm" />
               </Link>
               <Link to="/login" className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-7 py-4 text-base font-semibold text-slate-800 transition hover:border-slate-400 hover:bg-slate-50">
                 Open Existing Workspace
@@ -156,15 +178,41 @@ export default function LandingPage() {
                 </div>
               ))}
             </div>
+
+            <div className="mt-6 flex flex-wrap gap-2">
+              {playfulHighlights.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.text} className="landing-chip inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/85 px-4 py-2 text-xs font-semibold text-slate-700 shadow-sm backdrop-blur-sm">
+                    <Icon className="text-[#f97316]" />
+                    {item.text}
+                  </div>
+                );
+              })}
+            </div>
           </div>
 
           <div className="relative">
+            <div className="relative z-20 mb-4 grid grid-cols-2 gap-3 md:mb-5">
+              {playfulStickers.map((item) => {
+                const Icon = item.icon;
+                return (
+                  <div key={item.label} className={`rounded-2xl border border-white/90 bg-gradient-to-br ${item.tone} px-4 py-3 shadow-lg ${item.motion}`}>
+                    <div className={`inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white/80 ${item.text}`}>
+                      <Icon />
+                    </div>
+                    <p className="mt-2 text-xs font-bold tracking-wide text-slate-700">{item.label}</p>
+                  </div>
+                );
+              })}
+            </div>
+
             <div className="absolute -left-6 top-10 h-36 w-36 rounded-full bg-[#fdba74]/50 blur-3xl" />
             <div className="absolute right-0 top-0 h-40 w-40 rounded-full bg-[#60a5fa]/40 blur-3xl" />
 
             <div className="relative rounded-[2rem] border border-white/70 bg-[#0f172a] p-5 shadow-[0_30px_80px_rgba(15,23,42,0.28)] sm:p-6">
               <div className="rounded-[1.5rem] bg-gradient-to-br from-[#102542] via-[#143f6b] to-[#0f766e] p-5 text-white sm:p-6">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
                   <div>
                     <div className="text-xs uppercase tracking-[0.28em] text-cyan-100/80">Daily Pulse</div>
                     <div className="mt-2 text-2xl font-bold">Kinder Connect Live Board</div>
@@ -192,7 +240,7 @@ export default function LandingPage() {
                 </div>
 
                 <div className="mt-5 rounded-[1.5rem] bg-white p-5 text-slate-900">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
                     <div>
                       <div className="text-sm font-semibold text-slate-500">What schools manage here</div>
                       <div className="mt-1 text-xl font-bold">Operations, communication, progress</div>
@@ -218,7 +266,25 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="mx-auto mt-16 max-w-7xl lg:mt-24">
+        <section className="mx-auto mt-10 max-w-7xl landing-reveal landing-reveal-delay-2">
+          <div className="rounded-[2rem] border border-white/80 bg-white/70 p-4 shadow-xl shadow-slate-200/60 backdrop-blur-sm sm:p-5">
+            <div className="overflow-hidden rounded-2xl bg-gradient-to-r from-[#fef3c7] via-[#dbeafe] to-[#dcfce7] px-2 py-3 sm:px-4">
+              <div className="landing-marquee-track flex items-center gap-3 whitespace-nowrap">
+              {playfulHighlights.concat(playfulHighlights).map((item, index) => {
+                const Icon = item.icon;
+                return (
+                  <div key={`${item.text}-${index}`} className="inline-flex shrink-0 items-center gap-2 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm">
+                    <Icon className="text-[#1d4ed8]" />
+                    {item.text}
+                  </div>
+                );
+              })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mx-auto mt-16 max-w-7xl lg:mt-24 landing-reveal landing-reveal-delay-2">
           <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#0f766e]">Why it works</p>
@@ -247,7 +313,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="mx-auto mt-16 max-w-7xl rounded-[2rem] bg-[#fffaf3] p-6 shadow-xl shadow-orange-100/60 ring-1 ring-[#fed7aa] lg:mt-24 lg:p-8">
+        <section className="mx-auto mt-16 max-w-7xl rounded-[2rem] bg-[#fffaf3] p-6 shadow-xl shadow-orange-100/60 ring-1 ring-[#fed7aa] lg:mt-24 lg:p-8 landing-reveal landing-reveal-delay-3">
           <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr] lg:items-start">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#c2410c]">Role clarity</p>
@@ -281,7 +347,7 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="mx-auto mt-16 max-w-7xl lg:mt-24">
+        <section className="mx-auto mt-16 max-w-7xl lg:mt-24 landing-reveal landing-reveal-delay-4">
           <div className="mb-8 max-w-3xl">
             <p className="text-sm font-semibold uppercase tracking-[0.28em] text-[#1d4ed8]">Operational flow</p>
             <h2 className="mt-3 text-4xl font-bold tracking-[-0.04em] text-slate-950">A calmer school day starts with a cleaner system.</h2>
@@ -289,16 +355,16 @@ export default function LandingPage() {
 
           <div className="grid gap-4 lg:grid-cols-4">
             {workflowSteps.map((step) => (
-              <div key={step.step} className="rounded-[1.75rem] border border-slate-200 bg-slate-950 p-6 text-white shadow-2xl shadow-slate-300/20">
-                <div className="text-sm font-semibold tracking-[0.3em] text-cyan-300">{step.step}</div>
-                <h3 className="mt-5 text-2xl font-bold">{step.title}</h3>
-                <p className="mt-4 text-sm leading-7 text-slate-300">{step.text}</p>
+              <div key={step.step} className="rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-300/20">
+                <div className="inline-flex px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold tracking-[0.22em]">{step.step}</div>
+                <h3 className="mt-5 text-2xl font-bold text-slate-900">{step.title}</h3>
+                <p className="mt-4 text-sm leading-7 text-slate-700">{step.text}</p>
               </div>
             ))}
           </div>
         </section>
 
-        <section className="mx-auto mt-16 max-w-7xl lg:mt-24">
+        <section className="mx-auto mt-16 max-w-7xl lg:mt-24 landing-reveal landing-reveal-delay-4">
           <div className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="rounded-[2rem] bg-gradient-to-br from-[#0f766e] to-[#134e4a] p-8 text-white shadow-[0_30px_80px_rgba(15,118,110,0.25)]">
               <div className="text-sm font-semibold uppercase tracking-[0.28em] text-emerald-100">Trust points</div>
@@ -322,7 +388,7 @@ export default function LandingPage() {
 
               <div className="mt-8 grid gap-3 sm:grid-cols-2">
                 <Link to="/register" className="inline-flex items-center justify-center gap-2 rounded-full bg-slate-950 px-6 py-4 text-base font-semibold text-white transition hover:bg-slate-800">
-                  Create Workspace <FaArrowRight className="text-sm" />
+                  Request School Registration <FaArrowRight className="text-sm" />
                 </Link>
                 <Link to="/login" className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 px-6 py-4 text-base font-semibold text-slate-800 transition hover:bg-slate-50">
                   Sign In
@@ -332,6 +398,30 @@ export default function LandingPage() {
           </div>
         </section>
       </main>
+
+      <footer className="relative z-10 border-t border-white/60 bg-white/70 px-4 py-8 backdrop-blur-xl sm:px-6 lg:px-10">
+        <div className="mx-auto max-w-7xl rounded-3xl border border-white/80 bg-gradient-to-r from-white/90 via-[#f0f9ff]/80 to-[#fff7ed]/80 px-6 py-6 shadow-xl shadow-slate-200/60">
+          <div className="grid gap-6 md:grid-cols-[1.5fr_0.5fr] md:items-center">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.22em] text-slate-500">Kinder Connect</p>
+            <p className="mt-2 max-w-xl text-sm leading-7 text-slate-600">
+              A unified platform for school admins, teachers, and parents to run kinder operations with confidence and clarity.
+            </p>
+            <p className="mt-4 text-sm text-slate-500">© 2026 Kinder Connect. All rights reserved.</p>
+          </div>
+
+          <div className="flex items-center gap-3 text-sm md:justify-end">
+            <Link to="/privacy" className="font-semibold text-slate-600 transition hover:text-[#0f766e]">
+              Privacy Policy
+            </Link>
+            <span className="text-slate-300">•</span>
+            <Link to="/terms" className="font-semibold text-slate-600 transition hover:text-[#c2410c]">
+              Terms and Conditions
+            </Link>
+          </div>
+          </div>
+        </div>
+      </footer>
     </div>
   );
 }

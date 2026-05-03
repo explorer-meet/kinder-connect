@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
-import { FaSignOutAlt, FaUser, FaBars, FaTimes, FaChartBar, FaUsers, FaBook, FaGraduationCap, FaComments, FaCalendarAlt, FaClipboardList, FaExclamationTriangle } from 'react-icons/fa';
+import { FaSignOutAlt, FaBars, FaTimes, FaChartBar, FaBook, FaGraduationCap, FaComments, FaCalendarAlt, FaClipboardList, FaExclamationTriangle } from 'react-icons/fa';
 
 const Header = ({ title }) => {
   const { user, logout } = useAuthStore();
@@ -20,13 +20,6 @@ const Header = ({ title }) => {
     ],
     school_admin: [
       { path: '/school-admin/dashboard', label: 'Dashboard', icon: <FaBook /> },
-    ],
-    admin: [
-      { path: '/admin/dashboard', label: 'Dashboard', icon: <FaChartBar /> },
-      { path: '/admin/school', label: 'Schools', icon: <FaBook /> },
-      { path: '/admin/classes', label: 'Classes', icon: <FaGraduationCap /> },
-      { path: '/admin/enroll', label: 'Enroll Student', icon: <FaUsers /> },
-      { path: '/admin/circulars', label: 'Circulars', icon: <FaComments /> },
     ],
     teacher: [
       { path: '/teacher/dashboard', label: 'Dashboard', icon: <FaChartBar /> },

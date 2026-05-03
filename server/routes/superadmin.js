@@ -3,8 +3,193 @@ const { auth, authorize } = require('../middleware/auth');
 const prisma = require('../src/lib/prisma');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { sendMailSafe } = require('../src/lib/mailer');
 
 const router = express.Router();
+
+const generateTempPassword = (length = 10) => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%';
+  let password = '';
+  for (let i = 0; i < length; i += 1) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
+};
+
+// ===== SCHOOL REGISTRATION REQUESTS =====
+
+router.get('/school-requests', auth, authorize(['super_admin']), async (req, res) => {
+  try {
+    const statusFilter = req.query.status;
+    const where = statusFilter ? { status: statusFilter } : {};
+
+    const requests = await prisma.schoolRegistrationRequest.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json(requests);
+  } catch (err) {
+    console.error('Get school requests error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/school-request/:requestId/approve', auth, authorize(['super_admin']), async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const {
+      adminFirstName,
+      adminLastName,
+      adminEmail,
+      adminPassword,
+      reviewNotes,
+    } = req.body;
+
+    if (!adminFirstName || !adminLastName || !adminEmail) {
+      return res.status(400).json({ error: 'Admin first name, last name, and email are required' });
+    }
+
+    const request = await prisma.schoolRegistrationRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending requests can be approved' });
+    }
+
+    const normalizedAdminEmail = adminEmail.toLowerCase().trim();
+
+    const existingAdmin = await prisma.user.findUnique({
+      where: { email: normalizedAdminEmail },
+    });
+
+    if (existingAdmin) {
+      return res.status(400).json({ error: 'Admin email is already in use' });
+    }
+
+    const plainPassword = adminPassword && adminPassword.trim().length >= 6
+      ? adminPassword.trim()
+      : generateTempPassword();
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const school = await tx.school.create({
+        data: {
+          name: request.schoolName,
+          description: request.notes || '',
+          address: request.address || '',
+          city: request.city || '',
+          phone: request.contactPhone || '',
+          email: request.contactEmail,
+          website: request.website || '',
+          createdBy: req.userId,
+          isActive: true,
+        },
+      });
+
+      const schoolAdmin = await tx.user.create({
+        data: {
+          firstName: adminFirstName.trim(),
+          lastName: adminLastName.trim(),
+          email: normalizedAdminEmail,
+          phone: request.contactPhone || '',
+          password: hashedPassword,
+          role: 'school_admin',
+          schoolId: school.id,
+          isActive: true,
+        },
+      });
+
+      await tx.school.update({
+        where: { id: school.id },
+        data: { schoolAdminId: schoolAdmin.id },
+      });
+
+      const updatedRequest = await tx.schoolRegistrationRequest.update({
+        where: { id: requestId },
+        data: {
+          status: 'approved',
+          reviewedBy: req.userId,
+          reviewedAt: new Date(),
+          reviewNotes: reviewNotes || null,
+          approvedSchoolId: school.id,
+        },
+      });
+
+      return { school, schoolAdmin, updatedRequest };
+    });
+
+    await sendMailSafe({
+      to: [request.contactEmail, normalizedAdminEmail],
+      subject: 'School registration approved - Kinder Connect',
+      text: `Your school request has been approved.\nSchool: ${result.school.name}\nSchool Admin Login: ${result.schoolAdmin.email}\nTemporary Password: ${plainPassword}`,
+    });
+
+    res.json({
+      message: 'School request approved and school admin account created',
+      request: result.updatedRequest,
+      school: result.school,
+      schoolAdmin: {
+        id: result.schoolAdmin.id,
+        email: result.schoolAdmin.email,
+        firstName: result.schoolAdmin.firstName,
+        lastName: result.schoolAdmin.lastName,
+      },
+      adminCredentials: {
+        email: result.schoolAdmin.email,
+        password: plainPassword,
+      },
+    });
+  } catch (err) {
+    console.error('Approve school request error:', err);
+    res.status(500).json({ error: err.message || 'Failed to approve request' });
+  }
+});
+
+router.patch('/school-request/:requestId/reject', auth, authorize(['super_admin']), async (req, res) => {
+  try {
+    const { requestId } = req.params;
+    const { reviewNotes } = req.body;
+
+    const request = await prisma.schoolRegistrationRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!request) {
+      return res.status(404).json({ error: 'Request not found' });
+    }
+
+    if (request.status !== 'pending') {
+      return res.status(400).json({ error: 'Only pending requests can be rejected' });
+    }
+
+    const updatedRequest = await prisma.schoolRegistrationRequest.update({
+      where: { id: requestId },
+      data: {
+        status: 'rejected',
+        reviewedBy: req.userId,
+        reviewedAt: new Date(),
+        reviewNotes: reviewNotes || null,
+      },
+    });
+
+    await sendMailSafe({
+      to: request.contactEmail,
+      subject: 'School registration update - Kinder Connect',
+      text: `Your school registration request was rejected.${reviewNotes ? `\nReason: ${reviewNotes}` : ''}`,
+    });
+
+    res.json({ message: 'Request rejected', request: updatedRequest });
+  } catch (err) {
+    console.error('Reject school request error:', err);
+    res.status(500).json({ error: err.message || 'Failed to reject request' });
+  }
+});
 
 // ===== SCHOOL ACCOUNT MANAGEMENT =====
 
@@ -28,6 +213,13 @@ router.get('/schools', auth, authorize(['super_admin']), async (req, res) => {
             email: true,
             isActive: true,
           }
+        },
+        _count: {
+          select: {
+            classes: true,
+            students: true,
+            admins: true,
+          },
         },
       },
     });
@@ -240,6 +432,7 @@ router.get('/stats', auth, authorize(['super_admin']), async (req, res) => {
   try {
     const totalSchools = await prisma.school.count();
     const activeSchools = await prisma.school.count({ where: { isActive: true } });
+    const pendingRequests = await prisma.schoolRegistrationRequest.count({ where: { status: 'pending' } });
     const totalStudents = await prisma.student.count();
     const totalUsers = await prisma.user.count();
     const totalClasses = await prisma.class.count();
@@ -247,6 +440,7 @@ router.get('/stats', auth, authorize(['super_admin']), async (req, res) => {
     res.json({
       totalSchools,
       activeSchools,
+      pendingRequests,
       totalClasses,
       totalStudents,
       totalUsers,

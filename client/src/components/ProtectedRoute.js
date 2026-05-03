@@ -7,7 +7,7 @@ const roleDashboards = {
   school_admin: '/school-admin/dashboard',
   teacher: '/teacher/dashboard',
   parent: '/parent/dashboard',
-  admin: '/admin/dashboard',
+  admin: '/school-admin/dashboard',
 };
 
 const ProtectedRoute = ({ children, requiredRole }) => {

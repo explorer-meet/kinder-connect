@@ -2,6 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { auth, authorize } = require('../middleware/auth');
 const prisma = require('../src/lib/prisma');
+const { sendMailSafe } = require('../src/lib/mailer');
 
 const router = express.Router();
 
@@ -99,7 +100,12 @@ router.get('/staff', auth, authorize(['school_admin']), async (req, res) => {
     const user = await getCurrentSchoolUser(req.userId);
     const staff = await prisma.user.findMany({
       where: { schoolId: user.schoolId, role: 'teacher' },
-      select: { id: true, firstName: true, lastName: true, email: true, phone: true, role: true, isActive: true },
+      select: {
+        id: true, firstName: true, lastName: true, email: true, phone: true, role: true,
+        photo: true, isActive: true, address: true, qualification: true,
+        dateOfJoining: true, emergencyContactName: true, emergencyContactPhone: true,
+        staffDocuments: true,
+      },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
     });
     res.json(staff);
@@ -110,7 +116,8 @@ router.get('/staff', auth, authorize(['school_admin']), async (req, res) => {
 
 router.post('/staff', auth, authorize(['school_admin']), async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, role, password } = req.body;
+    const { firstName, lastName, email, phone, role, password, photo,
+      address, qualification, dateOfJoining, emergencyContactName, emergencyContactPhone, staffDocuments } = req.body;
     const currentUser = await getCurrentSchoolUser(req.userId);
 
     if (!firstName || !lastName || !email || !role) {
@@ -127,11 +134,24 @@ router.post('/staff', auth, authorize(['school_admin']), async (req, res) => {
         lastName,
         email,
         phone: phone || '',
+        photo: photo || null,
+        address: address || null,
+        qualification: qualification || null,
+        dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : null,
+        emergencyContactName: emergencyContactName || null,
+        emergencyContactPhone: emergencyContactPhone || null,
+        staffDocuments: staffDocuments || [],
         password: hashedPassword,
         role,
         schoolId: currentUser?.schoolId || null,
         isActive: true,
       },
+    });
+
+    await sendMailSafe({
+      to: staff.email,
+      subject: 'Your Kinder Connect staff account is ready',
+      text: `Hello ${staff.firstName}, your staff account has been created for ${role}. Email: ${staff.email}. Temporary password: ${password || 'temp123'}`,
     });
 
     res.status(201).json({ message: 'Staff added successfully', staff });
@@ -143,7 +163,8 @@ router.post('/staff', auth, authorize(['school_admin']), async (req, res) => {
 
 router.put('/staff/:staffId', auth, authorize(['school_admin']), async (req, res) => {
   try {
-    const { firstName, lastName, phone, role, isActive } = req.body;
+    const { firstName, lastName, phone, role, photo, isActive,
+      address, qualification, dateOfJoining, emergencyContactName, emergencyContactPhone, staffDocuments } = req.body;
     const staff = await prisma.user.update({
       where: { id: req.params.staffId },
       data: {
@@ -151,7 +172,14 @@ router.put('/staff/:staffId', auth, authorize(['school_admin']), async (req, res
         lastName: lastName || undefined,
         phone: phone !== undefined ? phone : undefined,
         role: role || undefined,
+        photo: photo !== undefined ? photo : undefined,
         isActive: isActive !== undefined ? isActive : undefined,
+        address: address !== undefined ? address : undefined,
+        qualification: qualification !== undefined ? qualification : undefined,
+        dateOfJoining: dateOfJoining !== undefined ? (dateOfJoining ? new Date(dateOfJoining) : null) : undefined,
+        emergencyContactName: emergencyContactName !== undefined ? emergencyContactName : undefined,
+        emergencyContactPhone: emergencyContactPhone !== undefined ? emergencyContactPhone : undefined,
+        staffDocuments: staffDocuments !== undefined ? staffDocuments : undefined,
       },
     });
     res.json({ message: 'Staff updated', staff });
@@ -295,6 +323,7 @@ router.post('/batch/:batchId/student', auth, authorize(['school_admin']), async 
   try {
     const {
       firstName, lastName, dateOfBirth, enrollmentNumber, parentIds,
+      photo,
       fatherFirstName, fatherLastName,
       motherFirstName, motherLastName,
       guardianFirstName, guardianLastName,
@@ -342,6 +371,7 @@ router.post('/batch/:batchId/student', auth, authorize(['school_admin']), async 
         lastName,
         dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
         enrollmentNumber: enrollmentNumber || `STU-${Date.now()}`,
+        photo: photo || null,
         schoolId: batch.schoolId,
         classId: batch.classId,
         batchId: req.params.batchId,
@@ -367,6 +397,16 @@ router.post('/batch/:batchId/student', auth, authorize(['school_admin']), async 
       }));
     }
 
+    if (parentAccounts.length > 0) {
+      await Promise.all(parentAccounts.map((p) => sendMailSafe({
+        to: p.email,
+        subject: `Child enrollment update: ${firstName} ${lastName}`,
+        text: p.isNewAccount
+          ? `Your child ${firstName} ${lastName} has been enrolled. Login email: ${p.email}. Temporary password: ${p.password}`
+          : `Your child ${firstName} ${lastName} has been enrolled and linked to your existing account (${p.email}).`,
+      })));
+    }
+
     res.status(201).json({ message: 'Student enrolled successfully', student, parentAccounts, parentAccount: parentAccounts[0] || null });
   } catch (err) {
     console.error('Enroll student error:', err);
@@ -378,6 +418,7 @@ router.put('/student/:studentId', auth, authorize(['school_admin']), async (req,
   try {
     const {
       firstName, lastName, dateOfBirth, enrollmentNumber, batchId, isActive,
+      photo,
       fatherFirstName, fatherLastName,
       motherFirstName, motherLastName,
       guardianFirstName, guardianLastName,
@@ -435,6 +476,7 @@ router.put('/student/:studentId', auth, authorize(['school_admin']), async (req,
         lastName: lastName !== undefined ? lastName : undefined,
         dateOfBirth: dateOfBirth !== undefined ? (dateOfBirth ? new Date(dateOfBirth) : null) : undefined,
         enrollmentNumber: enrollmentNumber !== undefined ? (enrollmentNumber || null) : undefined,
+        photo: photo !== undefined ? photo : undefined,
         schoolId: nextSchoolId,
         classId: nextClassId,
         batchId: nextBatchId,
@@ -459,6 +501,14 @@ router.put('/student/:studentId', auth, authorize(['school_admin']), async (req,
           await prisma.user.update({ where: { id: parentId }, data: { parentChildIds: [...currentChildren, student.id] } });
         }
       }));
+    }
+
+    if (parentAccounts.length > 0) {
+      await Promise.all(parentAccounts.map((p) => sendMailSafe({
+        to: p.email,
+        subject: `Child profile updated: ${student.firstName} ${student.lastName}`,
+        text: `A school admin updated enrollment details for ${student.firstName} ${student.lastName}.`,
+      })));
     }
 
     res.json({ message: 'Student updated successfully', student, parentAccounts });
@@ -564,6 +614,84 @@ router.put('/pickup-request/:requestId', auth, authorize(['school_admin']), asyn
     });
     res.json({ message: `Request ${status}`, request: updated });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── PTM Requests (admin approval) ─────────────────────────────────────────
+
+router.get('/ptm-requests', auth, authorize(['school_admin']), async (req, res) => {
+  try {
+    const user = await getCurrentSchoolUser(req.userId);
+    const requests = await prisma.pTMRequest.findMany({
+      where: { schoolId: user.schoolId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const studentIds = [...new Set(requests.map((request) => request.studentId).filter(Boolean))];
+    const parentIds = [...new Set(requests.map((request) => request.parentId).filter(Boolean))];
+    const teacherIds = [...new Set(requests.map((request) => request.teacherId).filter(Boolean))];
+
+    const [students, parents, teachers] = await Promise.all([
+      prisma.student.findMany({
+        where: { id: { in: studentIds } },
+        select: { id: true, firstName: true, lastName: true, batchId: true },
+      }),
+      prisma.user.findMany({
+        where: { id: { in: parentIds } },
+        select: { id: true, firstName: true, lastName: true, email: true, phone: true },
+      }),
+      prisma.user.findMany({
+        where: { id: { in: teacherIds } },
+        select: { id: true, firstName: true, lastName: true },
+      }),
+    ]);
+
+    const studentMap = Object.fromEntries(students.map((student) => [student.id, student]));
+    const parentMap = Object.fromEntries(parents.map((parent) => [parent.id, parent]));
+    const teacherMap = Object.fromEntries(teachers.map((teacher) => [teacher.id, teacher]));
+
+    res.json(requests.map((request) => ({
+      ...request,
+      student: studentMap[request.studentId] || null,
+      parent: parentMap[request.parentId] || null,
+      teacherName: request.teacherId && teacherMap[request.teacherId]
+        ? `${teacherMap[request.teacherId].firstName} ${teacherMap[request.teacherId].lastName}`
+        : null,
+    })));
+  } catch (err) {
+    console.error('Get PTM requests error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/ptm-request/:requestId', auth, authorize(['school_admin']), async (req, res) => {
+  try {
+    const { status, meetingDate, startTime, endTime, location, adminNotes, teacherId } = req.body;
+    if (!['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ error: 'Status must be approved or rejected' });
+    }
+
+    if (status === 'approved' && (!meetingDate || !startTime || !endTime)) {
+      return res.status(400).json({ error: 'meetingDate, startTime and endTime are required to approve a PTM request' });
+    }
+
+    const updated = await prisma.pTMRequest.update({
+      where: { id: req.params.requestId },
+      data: {
+        status,
+        meetingDate: meetingDate ? new Date(meetingDate) : null,
+        startTime: startTime || null,
+        endTime: endTime || null,
+        location: location || null,
+        adminNotes: adminNotes || null,
+        teacherId: teacherId || null,
+      },
+    });
+
+    res.json({ message: `PTM request ${status}`, request: updated });
+  } catch (err) {
+    console.error('Update PTM request error:', err);
     res.status(500).json({ error: err.message });
   }
 });

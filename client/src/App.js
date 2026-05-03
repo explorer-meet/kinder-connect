@@ -6,19 +6,14 @@ import useAuthStore from './store/authStore';
 import LandingPage from './pages/LandingPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import PrivacyPolicy from './pages/PrivacyPolicy';
+import TermsAndConditions from './pages/TermsAndConditions';
 
 // Super Admin Pages
 import SuperAdminDashboard from './pages/superadmin/Dashboard';
 
 // School Admin Pages
 import SchoolAdminDashboard from './pages/schooladmin/Dashboard';
-
-// Admin Pages (legacy)
-import AdminDashboard from './pages/admin/Dashboard';
-import SchoolManagement from './pages/admin/SchoolManagement';
-import ClassManagement from './pages/admin/ClassManagement';
-import StudentEnrollment from './pages/admin/StudentEnrollment';
-import CircularManagement from './pages/admin/CircularManagement';
 
 // Teacher Pages
 import TeacherDashboard from './pages/teacher/Dashboard';
@@ -48,7 +43,7 @@ const getDashboardPath = (role) => {
     school_admin: '/school-admin/dashboard',
     teacher: '/teacher/dashboard',
     parent: '/parent/dashboard',
-    admin: '/admin/dashboard',
+    admin: '/school-admin/dashboard',
   };
   return paths[role] || '/';
 };
@@ -87,6 +82,8 @@ function App() {
         <Route path="/" element={user ? <Navigate to={getDashboardPath(user.role)} /> : <LandingPage />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/privacy" element={<PrivacyPolicy />} />
+        <Route path="/terms" element={<TermsAndConditions />} />
 
         {/* Super Admin Routes */}
         <Route path="/super-admin/dashboard" element={
@@ -96,23 +93,6 @@ function App() {
         {/* School Admin Routes */}
         <Route path="/school-admin/dashboard" element={
           <ProtectedRoute requiredRole="school_admin"><SchoolAdminDashboard /></ProtectedRoute>
-        } />
-
-        {/* Admin Routes (legacy) */}
-        <Route path="/admin/dashboard" element={
-          <ProtectedRoute requiredRole="admin"><AdminDashboard /></ProtectedRoute>
-        } />
-        <Route path="/admin/school" element={
-          <ProtectedRoute requiredRole="admin"><SchoolManagement /></ProtectedRoute>
-        } />
-        <Route path="/admin/classes" element={
-          <ProtectedRoute requiredRole="admin"><ClassManagement /></ProtectedRoute>
-        } />
-        <Route path="/admin/enroll" element={
-          <ProtectedRoute requiredRole="admin"><StudentEnrollment /></ProtectedRoute>
-        } />
-        <Route path="/admin/circulars" element={
-          <ProtectedRoute requiredRole="admin"><CircularManagement /></ProtectedRoute>
         } />
 
         {/* Teacher Routes */}

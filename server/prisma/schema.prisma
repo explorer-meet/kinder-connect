@@ -53,16 +53,30 @@ enum IncidentSeverity {
   severe
 }
 
+enum SchoolRequestStatus {
+  pending
+  approved
+  rejected
+}
+
 model User {
-  id              String   @id @default(cuid())
-  firstName       String
-  lastName        String
-  email           String   @unique
-  phone           String
-  password        String
-  role            UserRole
-  photo           String?
-  
+  id                    String   @id @default(cuid())
+  firstName             String
+  lastName              String
+  email                 String   @unique
+  phone                 String
+  password              String
+  role                  UserRole
+  photo                 String?
+
+  // Extended profile fields
+  address               String?
+  qualification         String?
+  dateOfJoining         DateTime?
+  emergencyContactName  String?
+  emergencyContactPhone String?
+  staffDocuments        Json?    // [{name, url, uploadedAt}]
+
   // Hierarchy IDs
   schoolId        String?  // School account they belong to
   
@@ -326,6 +340,53 @@ model PTMBooking {
   updatedAt   DateTime @updatedAt
 }
 
+// PTM Session: teacher creates a session for a date/batch
+model PTMSession {
+  id          String     @id @default(cuid())
+  teacherId   String
+  batchId     String
+  schoolId    String
+  sessionDate DateTime
+  location    String?
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  slots       PTMSlot[]
+}
+
+// PTM Slot: one 15-minute slot per student
+model PTMSlot {
+  id          String     @id @default(cuid())
+  sessionId   String
+  studentId   String
+  startTime   String
+  endTime     String
+  status      String     @default("scheduled")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  session     PTMSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model PTMRequest {
+  id           String   @id @default(cuid())
+  schoolId     String
+  parentId     String
+  studentId    String
+  teacherId    String?
+  status       String   @default("pending")
+  requestNotes String?
+  preferredDate DateTime?
+  meetingDate  DateTime?
+  startTime    String?
+  endTime      String?
+  location     String?
+  adminNotes   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
 model Circular {
   id           String   @id @default(cuid())
   title        String
@@ -341,4 +402,27 @@ model Circular {
   attachments  Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
+}
+
+model SchoolRegistrationRequest {
+  id               String              @id @default(cuid())
+  schoolName       String
+  contactFirstName String
+  contactLastName  String
+  contactEmail     String
+  contactPhone     String?
+  city             String?
+  address          String?
+  website          String?
+  notes            String?             @db.Text
+  status           SchoolRequestStatus @default(pending)
+  reviewedBy       String?
+  reviewedAt       DateTime?
+  reviewNotes      String?             @db.Text
+  approvedSchoolId String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  @@index([status])
+  @@index([contactEmail])
 }

@@ -159,6 +159,7 @@ router.get('/student/:studentId', auth, async (req, res) => {
         OR: [
           { studentId: req.params.studentId, activityType: 'respective' },
           { batchId: student.batchId, activityType: 'general' },
+          { batchId: student.batchId, activityType: 'class_note' },
         ],
       },
       orderBy: { createdAt: 'desc' },

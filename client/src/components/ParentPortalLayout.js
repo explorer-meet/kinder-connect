@@ -22,10 +22,21 @@ const NAV_ITEMS = [
   { label: 'Activity Feed', to: '/parent/dashboard', state: { section: 'activity' }, icon: FaChartPie, match: ['/parent/feed/'], matchSection: 'activity' },
   { label: 'Attendance', to: '/parent/dashboard', state: { section: 'attendance' }, icon: FaClipboardList, match: ['/parent/attendance/'], matchSection: 'attendance' },
   { label: 'Development', to: '/parent/dashboard', state: { section: 'report' }, icon: FaBook, match: ['/parent/report/'], matchSection: 'report' },
-  { label: 'Book PTM', to: '/parent/ptm', icon: FaCalendarAlt, match: ['/parent/ptm'] },
+  { label: 'PTM Schedule', to: '/parent/dashboard', state: { section: 'ptm' }, icon: FaCalendarAlt, match: ['/parent/ptm'], matchSection: 'ptm' },
   { label: 'Pickup / Drop', to: '/parent/dashboard', state: { section: 'pickup' }, icon: FaShuttleVan, match: [], matchSection: 'pickup' },
   { label: 'Circulars', to: '/parent/dashboard', state: { section: 'circulars' }, icon: FaBullhorn, match: [], matchSection: 'circulars' },
 ];
+
+const ICON_STYLES = {
+  Home: { tone: 'text-blue-500', soft: 'bg-blue-50' },
+  'My Children': { tone: 'text-emerald-500', soft: 'bg-emerald-50' },
+  'Activity Feed': { tone: 'text-cyan-500', soft: 'bg-cyan-50' },
+  Attendance: { tone: 'text-indigo-500', soft: 'bg-indigo-50' },
+  Development: { tone: 'text-violet-500', soft: 'bg-violet-50' },
+  'PTM Schedule': { tone: 'text-amber-500', soft: 'bg-amber-50' },
+  'Pickup / Drop': { tone: 'text-orange-500', soft: 'bg-orange-50' },
+  Circulars: { tone: 'text-fuchsia-500', soft: 'bg-fuchsia-50' },
+};
 
 const ACCENTS = {
   blue: {
@@ -120,6 +131,7 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           {NAV_ITEMS.map(({ label, to, state, icon: Icon, match, matchSection }) => {
             const active = isActive({ match, matchSection });
+            const iconTheme = ICON_STYLES[label] || { tone: 'text-slate-500', soft: 'bg-slate-100' };
             return (
               <Link
                 key={`${label}-${to}`}
@@ -130,7 +142,9 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
                   active ? `${theme.active} shadow-md` : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
                 }`}
               >
-                <Icon className={active ? 'text-white' : 'text-slate-400'} />
+                <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-white/20' : iconTheme.soft}`}>
+                  <Icon className={active ? 'text-white' : iconTheme.tone} />
+                </span>
                 <span className="flex-1">{label}</span>
                 {!active && <FaChevronRight className="text-xs text-slate-300" />}
               </Link>

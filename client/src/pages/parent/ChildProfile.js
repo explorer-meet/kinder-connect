@@ -253,8 +253,10 @@ const ChildProfile = () => {
                   <p className="font-semibold text-gray-800 break-all">{student.enrollmentNumber}</p>
                 </div>
                 <div>
-                  <p className="text-gray-600">Class ID</p>
-                  <p className="font-semibold text-gray-800 text-xs break-all">{student.classId}</p>
+                  <p className="text-gray-600">Class</p>
+                  <p className="font-semibold text-gray-800">
+                    {student.class?.name ? `${student.class.name}${student.class?.section ? ` (${student.class.section})` : ''}` : 'N/A'}
+                  </p>
                 </div>
               </div>
             </div>

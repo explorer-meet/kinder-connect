@@ -239,5 +239,160 @@ router.get('/pickup-requests', auth, authorize(['parent']), async (req, res) => 
     res.status(500).json({ error: err.message });
   }
 });
+// GET /parent/ptm/slots — get all PTM slots for the parent's children
+router.get('/ptm/slots', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const children = await prisma.student.findMany({
+      where: {
+        parentIds: {
+          array_contains: req.userId,
+        },
+      },
+      select: { id: true },
+    });
+
+    const childIds = children.map((c) => c.id);
+    if (childIds.length === 0) return res.json([]);
+
+    const slots = await prisma.pTMSlot.findMany({
+      where: { studentId: { in: childIds } },
+      include: {
+        session: {
+          select: {
+            id: true,
+            sessionDate: true,
+            location: true,
+            notes: true,
+            teacherId: true,
+            batchId: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Enrich with teacher name and student name
+    const teacherIds = [...new Set(slots.map((s) => s.session.teacherId).filter(Boolean))];
+    const studentIds = [...new Set(slots.map((s) => s.studentId).filter(Boolean))];
+
+    const [teachers, students] = await Promise.all([
+      prisma.user.findMany({
+        where: { id: { in: teacherIds } },
+        select: { id: true, firstName: true, lastName: true },
+      }),
+      prisma.student.findMany({
+        where: { id: { in: studentIds } },
+        select: { id: true, firstName: true, lastName: true },
+      }),
+    ]);
+
+    const teacherMap = Object.fromEntries(teachers.map((t) => [t.id, t]));
+    const studentMap = Object.fromEntries(students.map((s) => [s.id, s]));
+
+    const enriched = slots.map((slot) => {
+      const teacher = teacherMap[slot.session.teacherId] || null;
+      const student = studentMap[slot.studentId] || null;
+      return {
+        slotId: slot.id,
+        sessionId: slot.sessionId,
+        studentId: slot.studentId,
+        studentName: student ? `${student.firstName} ${student.lastName}` : 'Unknown Student',
+        teacherId: slot.session.teacherId,
+        teacherName: teacher ? `${teacher.firstName} ${teacher.lastName}` : 'Unknown Teacher',
+        batchId: slot.session.batchId,
+        sessionDate: slot.session.sessionDate,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        status: slot.status,
+        location: slot.session.location || null,
+        notes: slot.session.notes || null,
+      };
+    });
+
+    res.json(enriched);
+  } catch (err) {
+    console.error('Parent PTM slots error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /parent/ptm/request — parent requests a PTM for a child
+router.post('/ptm/request', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const { studentId, requestNotes, preferredDate } = req.body;
+
+    if (!studentId) {
+      return res.status(400).json({ error: 'studentId is required' });
+    }
+
+    const student = await prisma.student.findUnique({
+      where: { id: studentId },
+      select: { id: true, schoolId: true, parentIds: true },
+    });
+
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const parentIds = Array.isArray(student.parentIds) ? student.parentIds : [];
+    if (!parentIds.includes(req.userId)) {
+      return res.status(403).json({ error: 'You are not authorized to request PTM for this student' });
+    }
+
+    const request = await prisma.pTMRequest.create({
+      data: {
+        schoolId: student.schoolId,
+        parentId: req.userId,
+        studentId,
+        requestNotes: requestNotes || null,
+        preferredDate: preferredDate ? new Date(preferredDate) : null,
+        status: 'pending',
+      },
+    });
+
+    res.status(201).json({ message: 'PTM request submitted', request });
+  } catch (err) {
+    console.error('Parent PTM request error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /parent/ptm/requests — list this parent's PTM requests
+router.get('/ptm/requests', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const requests = await prisma.pTMRequest.findMany({
+      where: { parentId: req.userId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const studentIds = [...new Set(requests.map((request) => request.studentId).filter(Boolean))];
+    const teacherIds = [...new Set(requests.map((request) => request.teacherId).filter(Boolean))];
+
+    const [students, teachers] = await Promise.all([
+      prisma.student.findMany({
+        where: { id: { in: studentIds } },
+        select: { id: true, firstName: true, lastName: true },
+      }),
+      prisma.user.findMany({
+        where: { id: { in: teacherIds } },
+        select: { id: true, firstName: true, lastName: true },
+      }),
+    ]);
+
+    const studentMap = Object.fromEntries(students.map((student) => [student.id, student]));
+    const teacherMap = Object.fromEntries(teachers.map((teacher) => [teacher.id, teacher]));
+
+    const enrichedRequests = requests.map((request) => ({
+      ...request,
+      studentName: studentMap[request.studentId] ? `${studentMap[request.studentId].firstName} ${studentMap[request.studentId].lastName}` : 'Unknown Student',
+      teacherName: request.teacherId && teacherMap[request.teacherId]
+        ? `${teacherMap[request.teacherId].firstName} ${teacherMap[request.teacherId].lastName}`
+        : null,
+    }));
+
+    res.json(enrichedRequests);
+  } catch (err) {
+    console.error('Parent PTM requests list error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 module.exports = router;

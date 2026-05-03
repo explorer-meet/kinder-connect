@@ -76,6 +76,16 @@ const useAuthStore = create((set) => ({
       console.error('Failed to get user:', err.message);
     }
   },
+
+  updateUser: (partialUser) => {
+    set((state) => {
+      const nextUser = normalizeUser({ ...(state.user || {}), ...(partialUser || {}) });
+      if (nextUser) {
+        localStorage.setItem('user', JSON.stringify(nextUser));
+      }
+      return { user: nextUser };
+    });
+  },
 }));
 
 export default useAuthStore;

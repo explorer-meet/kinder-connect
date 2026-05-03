@@ -2,15 +2,16 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import {
-  FaBars, FaTimes, FaSignOutAlt, FaChevronRight,
+  FaTimes, FaSignOutAlt, FaChevronRight,
   FaHome, FaLightbulb, FaBullhorn, FaClipboardList, FaCamera,
-  FaGraduationCap, FaExclamationTriangle, FaCalendarAlt, FaChartBar,
+  FaGraduationCap, FaExclamationTriangle, FaCalendarAlt, FaChartBar, FaUser,
 } from 'react-icons/fa';
 
 const NAV_INLINE = [
   { id: 'home',      label: 'Home',            icon: FaHome,      path: '/teacher/dashboard' },
   { id: 'homework',  label: 'Homework & Notes', icon: FaLightbulb, path: '/teacher/dashboard', state: { section: 'homework' } },
   { id: 'circulars', label: 'School Circulars', icon: FaBullhorn,  path: '/teacher/dashboard', state: { section: 'circulars' } },
+  { id: 'profile',   label: 'My Profile',       icon: FaUser,      path: '/teacher/dashboard', state: { section: 'profile' } },
 ];
 
 const NAV_TOOLS = [
@@ -21,6 +22,19 @@ const NAV_TOOLS = [
   { id: 'ptm',        label: 'PTM Management',   icon: FaCalendarAlt,         path: '/teacher/ptm' },
   { id: 'reports',    label: 'Reports',          icon: FaChartBar,            path: '/teacher/reports' },
 ];
+
+const ICON_STYLES = {
+  home: { tone: 'text-blue-500', soft: 'bg-blue-50' },
+  homework: { tone: 'text-amber-500', soft: 'bg-amber-50' },
+  circulars: { tone: 'text-violet-500', soft: 'bg-violet-50' },
+  profile: { tone: 'text-fuchsia-500', soft: 'bg-fuchsia-50' },
+  attendance: { tone: 'text-cyan-500', soft: 'bg-cyan-50' },
+  activity: { tone: 'text-sky-500', soft: 'bg-sky-50' },
+  milestones: { tone: 'text-emerald-500', soft: 'bg-emerald-50' },
+  incident: { tone: 'text-rose-500', soft: 'bg-rose-50' },
+  ptm: { tone: 'text-orange-500', soft: 'bg-orange-50' },
+  reports: { tone: 'text-indigo-500', soft: 'bg-indigo-50' },
+};
 
 export default function TeacherPortalLayout({ title, children }) {
   const navigate = useNavigate();
@@ -61,9 +75,13 @@ export default function TeacherPortalLayout({ title, children }) {
           </div>
           <div className="rounded-2xl bg-white/14 px-3 py-3 backdrop-blur-sm border border-white/10">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-inner">
-                {user?.firstName?.[0]}{user?.lastName?.[0]}
-              </div>
+              {user?.photo ? (
+                <img src={user.photo} alt="Teacher profile" className="w-11 h-11 rounded-2xl object-cover border border-white/20 shrink-0 shadow-inner" />
+              ) : (
+                <div className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center text-white font-bold text-sm shrink-0 shadow-inner">
+                  {user?.firstName?.[0]}{user?.lastName?.[0]}
+                </div>
+              )}
               <div className="min-w-0">
                 <p className="text-white text-sm font-semibold leading-tight truncate">{user?.firstName} {user?.lastName}</p>
                 <p className="text-indigo-100/90 text-xs capitalize mt-1">Teacher</p>
@@ -75,20 +93,25 @@ export default function TeacherPortalLayout({ title, children }) {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-4 px-3">
           {NAV_INLINE.map(({ id, label, icon: Icon, path, state }) => {
-            const active = currentPath === '/teacher/dashboard' && !state ? true : false;
-            // highlight Home when on /teacher/dashboard
-            const isHome = id === 'home' && currentPath === '/teacher/dashboard';
+            const isDashboard = currentPath === '/teacher/dashboard';
+            const requestedSection = location.state?.section;
+            const active = state?.section
+              ? isDashboard && requestedSection === state.section
+              : isDashboard && !requestedSection && id === 'home';
+            const iconTheme = ICON_STYLES[id] || { tone: 'text-gray-500', soft: 'bg-gray-100' };
             return (
               <button
                 key={id}
                 onClick={() => { navigate(path, state ? { state } : undefined); setSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium transition-all ${
-                  isHome
+                  active
                     ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 }`}
               >
-                <Icon className={isHome ? 'text-white' : 'text-gray-400'} />
+                <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-white/20' : iconTheme.soft}`}>
+                  <Icon className={active ? 'text-white' : iconTheme.tone} />
+                </span>
                 {label}
               </button>
             );
@@ -99,6 +122,7 @@ export default function TeacherPortalLayout({ title, children }) {
 
           {NAV_TOOLS.map(({ id, label, icon: Icon, path }) => {
             const active = currentPath === path || currentPath.startsWith(path + '/');
+            const iconTheme = ICON_STYLES[id] || { tone: 'text-gray-500', soft: 'bg-gray-100' };
             return (
               <button
                 key={id}
@@ -109,7 +133,9 @@ export default function TeacherPortalLayout({ title, children }) {
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 }`}
               >
-                <Icon className={active ? 'text-white' : 'text-gray-400'} />
+                <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-white/20' : iconTheme.soft}`}>
+                  <Icon className={active ? 'text-white' : iconTheme.tone} />
+                </span>
                 {label}
                 {!active && <FaChevronRight className="ml-auto text-gray-300 text-xs" />}
               </button>
@@ -127,19 +153,6 @@ export default function TeacherPortalLayout({ title, children }) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Top bar */}
-        <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shrink-0">
-          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-500 hover:text-gray-700 p-1">
-            <FaBars size={18} />
-          </button>
-          <div className="flex-1">
-            <h1 className="font-bold text-gray-800 text-base">{title}</h1>
-          </div>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white text-xs font-bold">
-            {user?.firstName?.[0]}{user?.lastName?.[0]}
-          </div>
-        </header>
-
         {/* Scrollable content */}
         <main className="flex-1 overflow-y-auto p-4 lg:p-6">
           {children}

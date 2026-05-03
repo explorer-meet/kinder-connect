@@ -1,7 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
-import { FaLock, FaEnvelope, FaArrowRight } from 'react-icons/fa';
+import { FaLock, FaEnvelope, FaArrowRight, FaSchool, FaStar, FaChild, FaHeart } from 'react-icons/fa';
+
+const highlights = [
+  { icon: FaSchool, label: 'School-ready workflows' },
+  { icon: FaChild, label: 'Parent-friendly visibility' },
+  { icon: FaHeart, label: 'Built for kinder care teams' },
+];
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -28,117 +34,118 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-500 via-primary-600 to-accent-500 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Decorative Background Elements */}
-      <div className="absolute top-10 right-10 w-40 h-40 bg-white opacity-10 rounded-full blur-3xl"></div>
-      <div className="absolute bottom-10 left-10 w-64 h-64 bg-accent-300 opacity-10 rounded-full blur-3xl"></div>
+    <div className="min-h-screen bg-gradient-to-br from-[#0f766e] via-[#1d4ed8] to-[#f97316] p-4 sm:p-6 lg:p-8 relative overflow-hidden">
+      <div className="pointer-events-none absolute -top-14 -left-14 h-56 w-56 rounded-full bg-white/20 blur-3xl" />
+      <div className="pointer-events-none absolute right-6 top-16 h-44 w-44 rounded-full bg-[#fde68a]/30 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-12 left-1/3 h-64 w-64 rounded-full bg-[#93c5fd]/25 blur-3xl" />
 
-      <div className="w-full max-w-md z-10">
-        {/* Card */}
-        <div className="card-premium shadow-2xl backdrop-blur-sm">
-          {/* Logo */}
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-primary-100 to-accent-100 rounded-2xl mb-4">
-              <span className="text-4xl">👶</span>
-            </div>
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">Kinder Connect</h1>
-            <p className="text-gray-500 text-sm">Kindergarten Care Management System</p>
+      <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-6xl items-center gap-8 lg:grid-cols-[1.05fr_0.95fr]">
+        <div className="hidden rounded-[2rem] border border-white/25 bg-white/10 p-8 text-white backdrop-blur-sm shadow-2xl lg:block">
+          <Link to="/" className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-white/20 text-2xl font-bold hover:bg-white/30 transition" aria-label="Go to landing page">
+            <span role="img" aria-hidden="true">👶</span>
+          </Link>
+          <h1 className="mt-6 text-5xl font-bold leading-tight tracking-tight">Welcome Back To Kinder Connect</h1>
+          <p className="mt-4 max-w-lg text-white/90 text-lg leading-8">
+            Continue managing classes, attendance, parent communication, and school operations from one calm dashboard.
+          </p>
+
+          <div className="mt-8 space-y-3">
+            {highlights.map((item) => {
+              const Icon = item.icon;
+              return (
+                <div key={item.label} className="flex items-center gap-3 rounded-2xl bg-white/15 px-4 py-3 border border-white/20">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-white text-[#1d4ed8]">
+                    <Icon />
+                  </span>
+                  <span className="font-semibold text-white/95">{item.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="w-full rounded-[2rem] border border-white/60 bg-white/95 p-5 shadow-2xl backdrop-blur-sm sm:p-8">
+          <div className="mb-4 flex justify-center lg:hidden">
+            <Link to="/" className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50">
+              <span role="img" aria-hidden="true">👶</span>
+              Back to Home
+            </Link>
           </div>
 
-          {/* Error Message */}
+          <div className="text-center">
+            <div className="mx-auto inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-[#dbeafe] to-[#ffedd5] text-[#1d4ed8] shadow-md">
+              <FaStar className="text-2xl" />
+            </div>
+            <h2 className="mt-4 text-3xl font-bold text-slate-900">Sign In</h2>
+            <p className="mt-1 text-sm text-slate-500">Access your school workspace</p>
+          </div>
+
           {error && (
-            <div className="alert alert-error mb-6 flex items-center gap-3">
-              <span className="text-lg">⚠️</span>
-              <p>{error}</p>
+            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {error}
             </div>
           )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Email Field */}
+          <form onSubmit={handleSubmit} className="mt-6 space-y-5">
             <div>
               <label className="label">Email Address</label>
               <div className="relative">
-                <FaEnvelope className="absolute left-4 top-3.5 text-gray-400" />
+                <FaEnvelope className="absolute left-4 top-3.5 text-slate-400" />
                 <input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder="you@school.com"
                   required
-                  className="input pl-10"
+                  className="input pl-10 rounded-xl"
                 />
               </div>
             </div>
 
-            {/* Password Field */}
             <div>
               <label className="label">Password</label>
               <div className="relative">
-                <FaLock className="absolute left-4 top-3.5 text-gray-400" />
+                <FaLock className="absolute left-4 top-3.5 text-slate-400" />
                 <input
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
+                  placeholder="********"
                   required
-                  className="input pl-10"
+                  className="input pl-10 rounded-xl"
                 />
               </div>
             </div>
 
-            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
-              className="btn btn-primary w-full py-3 text-lg font-semibold disabled:opacity-50 disabled:cursor-not-allowed mt-7"
+              className="mt-1 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-5 py-3.5 text-base font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {loading ? (
                 <>
-                  <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
+                  <div className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
                   Logging in...
                 </>
               ) : (
                 <>
-                  Login <FaArrowRight />
+                  Enter Dashboard <FaArrowRight />
                 </>
               )}
             </button>
           </form>
 
-          {/* Divider */}
-          <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200"></div>
-            </div>
+          <div className="relative my-7">
+            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-slate-200" /></div>
             <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">New to Kinder Connect?</span>
+              <span className="bg-white px-3 text-slate-500">New school to onboard?</span>
             </div>
           </div>
 
-          {/* Register Link */}
-          <Link
-            to="/register"
-            className="btn btn-outline w-full justify-center"
-          >
-            Create Account
+          <Link to="/register" className="inline-flex w-full items-center justify-center rounded-xl border border-slate-300 px-5 py-3 font-semibold text-slate-700 transition hover:bg-slate-50">
+            Request School Registration
           </Link>
-
-          {/* Demo Credentials */}
-          <div className="mt-8 pt-8 border-t border-gray-200">
-            <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">Demo Credentials</p>
-            <div className="space-y-2 text-xs text-gray-600 bg-gray-50 rounded-lg p-4">
-              <div><span className="font-semibold text-blue-600">Super Admin:</span> superadmin@kinderconnect.com / SuperAdmin@123</div>
-              <div><span className="font-semibold text-purple-600">School Admin:</span> Created when Super Admin adds a school</div>
-              <div><span className="font-semibold text-green-600">Teacher/Parent:</span> Added by School Admin</div>
-            </div>
-          </div>
         </div>
-
-        {/* Footer */}
-        <p className="text-center text-white text-sm mt-8 opacity-80">
-          © 2024 Kinder Connect. All rights reserved.
-        </p>
       </div>
     </div>
   );

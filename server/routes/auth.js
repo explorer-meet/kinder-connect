@@ -3,68 +3,78 @@ const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const prisma = require('../src/lib/prisma');
 const { auth } = require('../middleware/auth');
+const { sendMailSafe } = require('../src/lib/mailer');
 
 const router = express.Router();
 
-// Register
-router.post('/register', async (req, res) => {
+// Public school registration request
+router.post('/school-registration-request', async (req, res) => {
   try {
-    const { firstName, lastName, email, phone, password, role, schoolId } = req.body;
-    
-    // Validate inputs
-    if (!firstName || !lastName || !email || !password || !role) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    const {
+      schoolName,
+      contactFirstName,
+      contactLastName,
+      contactEmail,
+      contactPhone,
+      city,
+      address,
+      website,
+      notes,
+    } = req.body;
+
+    if (!schoolName || !contactFirstName || !contactLastName || !contactEmail) {
+      return res.status(400).json({ error: 'School and contact details are required' });
     }
-    
-    // Check if user exists
-    const userExists = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
+
+    const normalizedEmail = contactEmail.toLowerCase().trim();
+
+    const existingPending = await prisma.schoolRegistrationRequest.findFirst({
+      where: {
+        contactEmail: normalizedEmail,
+        status: 'pending',
+      },
     });
-    
-    if (userExists) {
-      return res.status(400).json({ error: 'Email already registered' });
+
+    if (existingPending) {
+      return res.status(400).json({ error: 'A pending request already exists for this email' });
     }
-    
-    // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
-    
-    // Create new user
-    const user = await prisma.user.create({
+
+    const request = await prisma.schoolRegistrationRequest.create({
       data: {
-        firstName,
-        lastName,
-        email: email.toLowerCase(),
-        phone: phone || '',
-        password: hashedPassword,
-        role,
-        schoolId: schoolId || null,
+        schoolName: schoolName.trim(),
+        contactFirstName: contactFirstName.trim(),
+        contactLastName: contactLastName.trim(),
+        contactEmail: normalizedEmail,
+        contactPhone: contactPhone || null,
+        city: city || null,
+        address: address || null,
+        website: website || null,
+        notes: notes || null,
       },
     });
-    
-    // Generate token
-    const token = jwt.sign(
-      { id: user.id, role: user.role, schoolId: user.schoolId },
-      process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRE }
-    );
-    
+
+    const superAdminEmail = process.env.SUPER_ADMIN_NOTIFY_EMAIL || process.env.MAIL_FROM;
+    await sendMailSafe({
+      to: [normalizedEmail, superAdminEmail],
+      subject: 'School registration request submitted',
+      text: `Request ID: ${request.id}\nSchool: ${request.schoolName}\nContact: ${request.contactFirstName} ${request.contactLastName}\nEmail: ${request.contactEmail}`,
+    });
+
     res.status(201).json({
-      message: 'User registered successfully',
-      token,
-      user: {
-        id: user.id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
-        role: user.role,
-        schoolId: user.schoolId,
-      },
+      message: 'Registration request submitted. A super admin will review it soon.',
+      requestId: request.id,
     });
   } catch (err) {
-    console.error('Register error:', err);
-    res.status(500).json({ error: err.message || 'Registration failed' });
+    console.error('School registration request error:', err);
+    res.status(500).json({ error: err.message || 'Could not submit request' });
   }
+});
+
+// Register
+router.post('/register', async (req, res) => {
+  return res.status(403).json({
+    error: 'Open account registration is disabled. Please ask your school to enroll you, or submit a school registration request.',
+  });
 });
 
 // Login
