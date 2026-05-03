@@ -1,0 +1,344 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  super_admin      // Super admin who creates school accounts
+  school_admin     // School/Brand account admin
+  teacher
+  parent
+}
+
+enum AttendanceStatus {
+  present
+  absent
+  late
+  half_day
+}
+
+enum IntakeLevel {
+  full
+  half
+  refused
+}
+
+enum PottyType {
+  wet
+  soiled
+  toilet
+}
+
+enum DomainType {
+  social
+  emotional
+  motor
+  language
+  cognitive
+}
+
+enum ReportStatus {
+  draft
+  completed
+  sent_to_parent
+}
+
+enum IncidentSeverity {
+  minor
+  moderate
+  severe
+}
+
+model User {
+  id              String   @id @default(cuid())
+  firstName       String
+  lastName        String
+  email           String   @unique
+  phone           String
+  password        String
+  role            UserRole
+  photo           String?
+  
+  // Hierarchy IDs
+  schoolId        String?  // School account they belong to
+  
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  school          School?   @relation("SchoolAdmins", fields: [schoolId], references: [id])
+  
+  // If parent - which children
+  parentChildIds  Json?    // Array of studentIds
+}
+
+model School {
+  id              String   @id @default(cuid())
+  name            String   // Brand name: "Shanit Juniors"
+  description     String?
+  logo            String?
+  address         String?
+  city            String?
+  phone           String?
+  email           String?
+  website         String?
+  
+  // Created by super_admin, managed by school_admin
+  createdBy       String?  // super_admin ID
+  schoolAdminId   String?  // school_admin user ID
+  
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  admins          User[]   @relation("SchoolAdmins")
+  classes         Class[]
+  batches         Batch[]
+  students        Student[]
+}
+
+model Class {
+  id         String   @id @default(cuid())
+  schoolId   String
+  name       String   // e.g., "Jr. KG"
+  section    String?  // e.g., "A", "B"
+  capacity   Int?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  batches    Batch[]
+  students   Student[]
+  
+  @@unique([schoolId, name, section])
+}
+
+model Batch {
+  id         String   @id @default(cuid())
+  schoolId   String
+  classId    String
+  shiftName  String   // e.g., "Morning", "Evening"
+  startTime  String   // e.g., "09:00 AM"
+  endTime    String   // e.g., "12:00 PM"
+  capacity   Int?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  school     School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  class      Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  students   Student[]
+  attendance Attendance[]
+  
+  @@unique([classId, shiftName])
+}
+
+model Student {
+  id               String   @id @default(cuid())
+  firstName        String
+  lastName         String
+  dateOfBirth      DateTime?
+  enrollmentNumber String?  @unique
+  photo            String?
+
+  // Family
+  fatherFirstName  String?
+  fatherLastName   String?
+  motherFirstName  String?
+  motherLastName   String?
+  guardianFirstName String?
+  guardianLastName  String?
+
+  // Documents (array of {name, url, uploadedAt})
+  documents        Json?
+
+  // Hierarchy
+  schoolId         String
+  classId          String
+  batchId          String
+
+  // Parent IDs
+  parentIds        Json?    // Array of parent user IDs
+
+  enrollmentDate   DateTime @default(now())
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  school           School   @relation(fields: [schoolId], references: [id], onDelete: Cascade)
+  class            Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
+  batch            Batch    @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  pickupRequests   PickupRequest[]
+}
+
+model PickupRequest {
+  id            String   @id @default(cuid())
+  studentId     String
+  requestedById String   // parent user ID
+  schoolId      String
+  personName    String
+  mobileNumber  String
+  photoUrl      String?
+  status        String   @default("pending") // pending / approved / rejected
+  adminNotes    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  student       Student  @relation(fields: [studentId], references: [id], onDelete: Cascade)
+}
+
+model ActivityLog {
+  id               String      @id @default(cuid())
+  studentId        String?
+  batchId          String
+  teacherId        String
+  date             DateTime    @default(now())
+  activityType     String
+  napStartTime     DateTime?
+  napEndTime       DateTime?
+  napDuration      Int?
+  mealType         String?
+  foodItems        Json?
+  intakeLevel      IntakeLevel?
+  pottyType        PottyType?
+  time             DateTime?
+  notes            String?   @db.Text
+  moodAtArrival    String?
+  moodAtDeparture  String?
+  moodNotes        String?   @db.Text
+  mediaUrl         String?
+  mediaType        String?
+  caption          String?
+  milestoneAchieved String?
+  domain           DomainType?
+  description      String?   @db.Text
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+}
+
+model Milestone {
+  id          String     @id @default(cuid())
+  studentId   String
+  batchId     String
+  teacherId   String
+  domain      DomainType
+  milestone   String
+  description String?
+  isAchieved  Boolean    @default(false)
+  achievedDate DateTime?
+  month       Int?
+  year        Int?
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model IncidentReport {
+  id                     String           @id @default(cuid())
+  studentId              String
+  batchId                String
+  teacherId              String
+  incidentType           String
+  description            String
+  severity               IncidentSeverity @default(minor)
+  photo                  String?
+  actionTaken            String?
+  parentNotified         Boolean          @default(false)
+  parentNotificationTime DateTime?
+  followUpRequired       Boolean?
+  followUpNotes          String?
+  incidentTime           DateTime         @default(now())
+  createdAt              DateTime         @default(now())
+  updatedAt              DateTime         @updatedAt
+}
+
+model Report {
+  id                    String       @id @default(cuid())
+  studentId             String
+  batchId               String
+  teacherId             String
+  month                 Int
+  year                  Int
+  domains               Json?
+  overallSummary        String?
+  highlights            Json?
+  areasForImprovement   Json?
+  recommendedActivities Json?
+  reportStatus          ReportStatus @default(draft)
+  sentToParentOn        DateTime?
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+}
+
+model Attendance {
+  id          String           @id @default(cuid())
+  studentId   String
+  batchId     String
+  date        DateTime
+  status      AttendanceStatus
+  checkInTime DateTime?
+  checkOutTime DateTime?
+  pickedUpBy  String?
+  notes       String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  // Relations
+  batch       Batch            @relation(fields: [batchId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id          String   @id @default(cuid())
+  senderId    String
+  recipientId String
+  studentId   String?
+  message     String
+  mediaUrl    String?
+  isRead      Boolean  @default(false)
+  readAt      DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model PTMBooking {
+  id          String   @id @default(cuid())
+  teacherId   String
+  parentId    String?
+  studentId   String
+  batchId     String
+  meetingDate DateTime
+  startTime   String
+  endTime     String
+  status      String   @default("available")
+  bookedOn    DateTime?
+  location    String?
+  meetingNotes String?
+  feedback    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Circular {
+  id           String   @id @default(cuid())
+  title        String
+  description  String
+  content      String?
+  adminId      String   // sender admin user ID
+  schoolId     String?  // school scope
+  batchIds     Json?    // Array of batch IDs (can send to specific batches)
+  circularType String?
+  publishDate  DateTime @default(now())
+  expiryDate   DateTime?
+  isPublished  Boolean  @default(true)
+  attachments  Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
