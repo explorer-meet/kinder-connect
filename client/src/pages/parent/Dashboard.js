@@ -6,28 +6,34 @@ import {
   FaCamera, FaBook, FaClipboardList, FaCalendarAlt,
   FaArrowRight, FaShuttleVan, FaPlus, FaTimes, FaCheck, FaBan,
   FaClock, FaUpload, FaBullhorn, FaChild, FaHome, FaSignOutAlt,
-  FaChevronRight, FaMapMarkerAlt, FaUser,
+  FaChevronRight, FaMapMarkerAlt, FaUser, FaGraduationCap, FaExclamationTriangle, FaSchool, FaStethoscope,
 } from 'react-icons/fa';
 
 const NAV = [
-  { id: 'home',      label: 'Home',            icon: FaHome },
-  { id: 'children',  label: 'My Children',     icon: FaChild },
-  { id: 'activity',  label: 'Activity Feed',   icon: FaCamera },
-  { id: 'attendance',label: 'Attendance',       icon: FaClipboardList },
-  { id: 'report',    label: 'Development',      icon: FaBook },
-  { id: 'ptm',       label: 'PTM Schedule',     icon: FaCalendarAlt },
-  { id: 'pickup',    label: 'Pickup / Drop',    icon: FaShuttleVan },
-  { id: 'circulars', label: 'Circulars',        icon: FaBullhorn },
+  { id: 'home',       label: 'Home',            icon: FaHome },
+  { id: 'children',   label: 'My Children',     icon: FaChild },
+  { id: 'activity',   label: 'Activity Feed',   icon: FaCamera },
+  { id: 'attendance', label: 'Attendance',       icon: FaClipboardList },
+  { id: 'report',     label: 'Reports',          icon: FaBook },
+  { id: 'medical',    label: 'Medical Form',     icon: FaStethoscope },
+  { id: 'milestones', label: 'Milestones',       icon: FaGraduationCap },
+  { id: 'incidents',  label: 'Incident Reports', icon: FaExclamationTriangle },
+  { id: 'ptm',        label: 'PTM Schedule',     icon: FaCalendarAlt },
+  { id: 'pickup',     label: 'Pickup / Drop',    icon: FaShuttleVan },
+  { id: 'circulars',  label: 'Circulars',        icon: FaBullhorn },
 ];
 
 const NAV_ICON_STYLES = {
-  home: { tone: 'text-blue-500', soft: 'bg-blue-50' },
-  activity: { tone: 'text-cyan-500', soft: 'bg-cyan-50' },
-  attendance: { tone: 'text-indigo-500', soft: 'bg-indigo-50' },
-  report: { tone: 'text-violet-500', soft: 'bg-violet-50' },
-  ptm: { tone: 'text-amber-500', soft: 'bg-amber-50' },
-  pickup: { tone: 'text-orange-500', soft: 'bg-orange-50' },
-  circulars: { tone: 'text-fuchsia-500', soft: 'bg-fuchsia-50' },
+  home:       { tone: 'text-blue-500',    soft: 'bg-blue-50'    },
+  activity:   { tone: 'text-cyan-500',    soft: 'bg-cyan-50'    },
+  attendance: { tone: 'text-indigo-500',  soft: 'bg-indigo-50'  },
+  report:     { tone: 'text-violet-500',  soft: 'bg-violet-50'  },
+  medical:    { tone: 'text-rose-500',    soft: 'bg-rose-50'    },
+  milestones: { tone: 'text-emerald-500', soft: 'bg-emerald-50' },
+  incidents:  { tone: 'text-rose-500',    soft: 'bg-rose-50'    },
+  ptm:        { tone: 'text-amber-500',   soft: 'bg-amber-50'   },
+  pickup:     { tone: 'text-orange-500',  soft: 'bg-orange-50'  },
+  circulars:  { tone: 'text-fuchsia-500', soft: 'bg-fuchsia-50' },
 };
 
 const AVATAR_COLORS = [
@@ -36,6 +42,53 @@ const AVATAR_COLORS = [
   'from-emerald-500 to-teal-600',
   'from-rose-500 to-pink-600',
   'from-amber-500 to-orange-500',
+];
+
+const createEmptyMedicalForm = () => ({
+  hasAllergies: false,
+  allergyDetails: '',
+  asthma: false,
+  diabetes: false,
+  epilepsy: false,
+  heartCondition: false,
+  visionConcern: false,
+  hearingConcern: false,
+  foodRestriction: false,
+  foodRestrictionDetails: '',
+  onMedication: false,
+  medicationDetails: '',
+  surgeryHistory: false,
+  surgeryDetails: '',
+  hospitalizationHistory: false,
+  hospitalizationDetails: '',
+  specialNeeds: false,
+  specialNeedsDetails: '',
+  requiresEmergencyMedication: false,
+  emergencyMedicationDetails: '',
+  immunizationsUpToDate: true,
+  bloodGroup: '',
+  doctorName: '',
+  doctorPhone: '',
+  hospitalPreference: '',
+  insuranceProvider: '',
+  additionalNotes: '',
+});
+
+const MEDICAL_TOGGLES = [
+  { key: 'hasAllergies', label: 'Allergies', detailKey: 'allergyDetails', detailLabel: 'Allergy details' },
+  { key: 'asthma', label: 'Asthma' },
+  { key: 'diabetes', label: 'Diabetes' },
+  { key: 'epilepsy', label: 'Epilepsy / Seizures' },
+  { key: 'heartCondition', label: 'Heart condition' },
+  { key: 'visionConcern', label: 'Vision concern' },
+  { key: 'hearingConcern', label: 'Hearing concern' },
+  { key: 'foodRestriction', label: 'Food restriction', detailKey: 'foodRestrictionDetails', detailLabel: 'Food restriction details' },
+  { key: 'onMedication', label: 'Regular medication', detailKey: 'medicationDetails', detailLabel: 'Medication details' },
+  { key: 'surgeryHistory', label: 'Surgery history', detailKey: 'surgeryDetails', detailLabel: 'Surgery history details' },
+  { key: 'hospitalizationHistory', label: 'Hospitalization history', detailKey: 'hospitalizationDetails', detailLabel: 'Hospitalization details' },
+  { key: 'specialNeeds', label: 'Special needs support', detailKey: 'specialNeedsDetails', detailLabel: 'Special support details' },
+  { key: 'requiresEmergencyMedication', label: 'Emergency medication required', detailKey: 'emergencyMedicationDetails', detailLabel: 'Emergency medication details' },
+  { key: 'immunizationsUpToDate', label: 'Immunizations up to date' },
 ];
 
 const statusBadge = (status) => {
@@ -53,21 +106,6 @@ const circularTypeStyle = (type) => {
   return 'bg-violet-50 text-violet-700 border-violet-100';
 };
 
-const CHILD_ACTIONS = {
-  activity: {
-    label: 'Activity Feed',
-    getPath: (childId) => `/parent/feed/${childId}`,
-  },
-  attendance: {
-    label: 'Attendance',
-    getPath: (childId) => `/parent/attendance/${childId}`,
-  },
-  report: {
-    label: 'Development Report',
-    getPath: (childId) => `/parent/report/${childId}`,
-  },
-};
-
 export default function ParentDashboard() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -80,12 +118,53 @@ export default function ParentDashboard() {
   const [circulars, setCirculars] = useState([]);
   const [pickupRequests, setPickupRequests] = useState([]);
   const [toast, setToast] = useState(null);
-  const [childPickerAction, setChildPickerAction] = useState(null);
-  const [pendingChildAction, setPendingChildAction] = useState(null);
   const [expandedCircular, setExpandedCircular] = useState(null);
+
+  // Child selection for sidebar sections
+  const [activityChildId, setActivityChildId] = useState('');
+  const [attendanceChildId, setAttendanceChildId] = useState('');
+  const [reportChildId, setReportChildId] = useState('');
+  const [profileChildId, setProfileChildId] = useState('');
+  const [medicalChildId, setMedicalChildId] = useState('');
+
+  // Inline data for Activity section
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityItems, setActivityItems] = useState([]);
+  const [activityFilter, setActivityFilter] = useState('all');
+
+  // Inline data for Attendance section
+  const [attendanceLoading, setAttendanceLoading] = useState(false);
+  const [attendanceItems, setAttendanceItems] = useState([]);
+
+  // Inline data for Reports section
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportList, setReportList] = useState([]);
+  const [reportDetail, setReportDetail] = useState(null);
+  const [reportDetailLoading, setReportDetailLoading] = useState(false);
+  const [reportSelMonth, setReportSelMonth] = useState(new Date().getMonth() + 1);
+  const [reportSelYear, setReportSelYear] = useState(new Date().getFullYear());
+
+  // Inline data for Profile section
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileStudent, setProfileStudent] = useState(null);
+  const [medicalLoading, setMedicalLoading] = useState(false);
+  const [medicalSaving, setMedicalSaving] = useState(false);
+  const [medicalForm, setMedicalForm] = useState(createEmptyMedicalForm());
 
   const [showPickupForm, setShowPickupForm] = useState(false);
   const [pickupForm, setPickupForm] = useState({ studentId: '', personName: '', mobileNumber: '', photoUrl: '' });
+
+  // Milestones inline state
+  const [msChildId, setMsChildId] = useState('');
+  const [milestones, setMilestones] = useState([]);
+  const [msLoading, setMsLoading] = useState(false);
+  const [msFilter, setMsFilter] = useState('');
+
+  // Incidents inline state
+  const [incChildId, setIncChildId] = useState('');
+  const [incidents, setIncidents] = useState([]);
+  const [incLoading, setIncLoading] = useState(false);
+  const [incFilter, setIncFilter] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
 
@@ -96,10 +175,10 @@ export default function ParentDashboard() {
   const [submittingPtmRequest, setSubmittingPtmRequest] = useState(false);
   const [ptmRequestForm, setPtmRequestForm] = useState({ studentId: '', preferredDate: '', requestNotes: '' });
 
-  const showToast = (type, text) => {
+  const showToast = useCallback((type, text) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), 4000);
-  };
+  }, []);
 
   const fetchChildren = async () => {
     try {
@@ -139,6 +218,124 @@ export default function ParentDashboard() {
       setPtmSlots([]);
     }
   }, []);
+
+  const loadActivityData = useCallback(async (childId) => {
+    if (!childId) return;
+    setActivityLoading(true);
+    try {
+      const res = await api.get(`/activities/student/${childId}`);
+      setActivityItems(res.data || []);
+    } catch {
+      setActivityItems([]);
+      showToast('error', 'Failed to load activity feed');
+    } finally {
+      setActivityLoading(false);
+    }
+  }, [showToast]);
+
+  const loadAttendanceData = useCallback(async (childId) => {
+    if (!childId) return;
+    setAttendanceLoading(true);
+    try {
+      const res = await api.get(`/students/parent/child/${childId}/attendance`);
+      setAttendanceItems(res.data?.attendance || []);
+    } catch {
+      setAttendanceItems([]);
+      showToast('error', 'Failed to load attendance data');
+    } finally {
+      setAttendanceLoading(false);
+    }
+  }, [showToast]);
+
+  const loadReportData = useCallback(async (childId) => {
+    if (!childId) return;
+    setReportLoading(true);
+    setReportDetail(null);
+    try {
+      const res = await api.get(`/reports/student/${childId}`);
+      const list = res.data || [];
+      setReportList(list);
+      // auto-select most recent
+      if (list.length > 0) {
+        setReportSelMonth(list[0].month);
+        setReportSelYear(list[0].year);
+      }
+    } catch {
+      setReportList([]);
+    } finally {
+      setReportLoading(false);
+    }
+  }, []);
+
+  const loadReportDetail = useCallback(async (reportId) => {
+    if (!reportId) { setReportDetail(null); return; }
+    setReportDetailLoading(true);
+    try {
+      const res = await api.get(`/reports/${reportId}`);
+      setReportDetail(res.data);
+    } catch {
+      setReportDetail(null);
+    } finally {
+      setReportDetailLoading(false);
+    }
+  }, []);
+
+  const loadProfileData = useCallback(async (childId) => {
+    if (!childId) return;
+    setProfileLoading(true);
+    try {
+      const res = await api.get(`/students/${childId}`);
+      setProfileStudent(res.data || null);
+    } catch {
+      setProfileStudent(null);
+      showToast('error', 'Failed to load child profile');
+    } finally {
+      setProfileLoading(false);
+    }
+  }, [showToast]);
+
+  const loadMedicalData = useCallback(async (childId) => {
+    if (!childId) return;
+    setMedicalLoading(true);
+    try {
+      const res = await api.get(`/students/parent/child/${childId}/medical-profile`);
+      const profile = res.data?.medicalProfile || {};
+      const allergies = Array.isArray(res.data?.student?.allergies) ? res.data.student.allergies : [];
+      const notes = res.data?.student?.medicalNotes || '';
+      setMedicalForm({
+        ...createEmptyMedicalForm(),
+        ...profile,
+        hasAllergies: profile.hasAllergies ?? allergies.length > 0,
+        allergyDetails: profile.allergyDetails ?? allergies.join(', '),
+        additionalNotes: profile.additionalNotes ?? notes,
+      });
+    } catch {
+      setMedicalForm(createEmptyMedicalForm());
+      showToast('error', 'Failed to load medical form');
+    } finally {
+      setMedicalLoading(false);
+    }
+  }, [showToast]);
+
+  const saveMedicalData = useCallback(async () => {
+    if (!medicalChildId) return;
+    setMedicalSaving(true);
+    try {
+      const allergies = medicalForm.hasAllergies
+        ? medicalForm.allergyDetails.split(',').map((item) => item.trim()).filter(Boolean)
+        : [];
+      await api.put(`/students/parent/child/${medicalChildId}/medical-profile`, {
+        medicalProfile: medicalForm,
+        allergies,
+        medicalNotes: medicalForm.additionalNotes,
+      });
+      showToast('success', 'Medical form saved successfully');
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Failed to save medical form');
+    } finally {
+      setMedicalSaving(false);
+    }
+  }, [medicalChildId, medicalForm, showToast]);
 
   const fetchPtmRequests = useCallback(async () => {
     try {
@@ -194,10 +391,6 @@ export default function ParentDashboard() {
   };
 
   const go = (section) => {
-    if (CHILD_ACTIONS[section]) {
-      handleChildAction(section);
-      return;
-    }
     if (section === 'ptm') {
       setSidebarOpen(false);
       setActiveSection('ptm');
@@ -208,26 +401,6 @@ export default function ParentDashboard() {
     setSidebarOpen(false);
   };
 
-  const handleChildAction = useCallback((actionKey) => {
-    const action = CHILD_ACTIONS[actionKey];
-    if (!action) return;
-    if (loading) {
-      showToast('error', 'Children are still loading. Please try again.');
-      return;
-    }
-    if (children.length === 0) {
-      showToast('error', 'No child enrolled yet.');
-      return;
-    }
-    if (children.length === 1) {
-      navigate(action.getPath(children[0].id));
-      setSidebarOpen(false);
-      return;
-    }
-    setChildPickerAction(actionKey);
-    setSidebarOpen(false);
-  }, [loading, children, navigate]);
-
   useEffect(() => {
     Promise.all([fetchChildren(), fetchCirculars(), fetchPickupRequests()]);
   }, []);
@@ -235,10 +408,6 @@ export default function ParentDashboard() {
   useEffect(() => {
     const requestedSection = location.state?.section;
     if (requestedSection && NAV.some((item) => item.id === requestedSection)) {
-      if (CHILD_ACTIONS[requestedSection]) {
-        setPendingChildAction(requestedSection);
-        return;
-      }
       setActiveSection(requestedSection);
       if (requestedSection === 'ptm') {
         loadPtmData();
@@ -247,17 +416,48 @@ export default function ParentDashboard() {
   }, [location.state, loadPtmData]);
 
   useEffect(() => {
-    if (!pendingChildAction || loading) return;
-    handleChildAction(pendingChildAction);
-    setPendingChildAction(null);
-  }, [pendingChildAction, loading, handleChildAction]);
+    if (loading || children.length === 0) return;
+    const firstChild = children[0]?.id || '';
+    if (!activityChildId) setActivityChildId(firstChild);
+    if (!attendanceChildId) setAttendanceChildId(firstChild);
+    if (!reportChildId) setReportChildId(firstChild);
+    if (!profileChildId) setProfileChildId(firstChild);
+    if (!medicalChildId) setMedicalChildId(firstChild);
+    if (!msChildId) setMsChildId(firstChild);
+    if (!incChildId) setIncChildId(firstChild);
+  }, [loading, children, activityChildId, attendanceChildId, reportChildId, profileChildId, medicalChildId, msChildId, incChildId]);
 
-  const handleChildPick = (childId) => {
-    const action = childPickerAction ? CHILD_ACTIONS[childPickerAction] : null;
-    if (!action) return;
-    setChildPickerAction(null);
-    navigate(action.getPath(childId));
-  };
+  useEffect(() => {
+    if (!activityChildId) return;
+    setActivityFilter('all');
+    loadActivityData(activityChildId);
+  }, [activityChildId, loadActivityData]);
+
+  useEffect(() => {
+    if (!attendanceChildId) return;
+    loadAttendanceData(attendanceChildId);
+  }, [attendanceChildId, loadAttendanceData]);
+
+  useEffect(() => {
+    if (!reportChildId) return;
+    loadReportData(reportChildId);
+  }, [reportChildId, loadReportData]);
+
+  // When month/year selection changes, find the matching report and load detail
+  useEffect(() => {
+    const match = reportList.find(r => r.month === reportSelMonth && r.year === reportSelYear);
+    loadReportDetail(match ? match.id : null);
+  }, [reportSelMonth, reportSelYear, reportList, loadReportDetail]);
+
+  useEffect(() => {
+    if (!profileChildId) return;
+    loadProfileData(profileChildId);
+  }, [profileChildId, loadProfileData]);
+
+  useEffect(() => {
+    if (!medicalChildId) return;
+    loadMedicalData(medicalChildId);
+  }, [medicalChildId, loadMedicalData]);
 
   const handlePtmRequestSubmit = async (e) => {
     e.preventDefault();
@@ -281,6 +481,44 @@ export default function ParentDashboard() {
   };
 
   const pendingPickups = pickupRequests.filter((r) => r.status === 'pending').length;
+
+  const renderSectionChildPicker = (selectedId, setSelectedId, activeClass, inactiveClass) => {
+    if (loading) {
+      return (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
+        </div>
+      );
+    }
+
+    if (children.length === 0) {
+      return (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-sm text-slate-500">
+          No children enrolled yet.
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+        <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Select Child</label>
+        <div className="flex flex-wrap gap-2">
+          {children.map((child, i) => (
+            <button
+              key={child.id}
+              onClick={() => setSelectedId(child.id)}
+              className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border transition ${selectedId === child.id ? activeClass : inactiveClass}`}
+            >
+              <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white text-xs font-bold`}>
+                {child.firstName[0]}
+              </div>
+              {child.firstName} {child.lastName}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  };
 
   // ── Sidebar ────────────────────────────────────────────────────────────────
   const Sidebar = () => (
@@ -435,35 +673,64 @@ export default function ParentDashboard() {
   );
 
   const renderChildren = () => (
-    <div className="space-y-4">
-      <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FaChild className="text-blue-500" /> My Children</h2>
+    <div className="space-y-5">
+      <div className="rounded-3xl bg-gradient-to-r from-cyan-600 via-blue-600 to-indigo-700 p-5 text-white shadow-lg relative overflow-hidden">
+        <div className="absolute -right-8 -top-8 w-28 h-28 rounded-full bg-white/10" />
+        <div className="absolute right-16 -bottom-10 w-24 h-24 rounded-full bg-white/10" />
+        <p className="text-cyan-100 text-xs uppercase tracking-wide font-semibold">Family Space</p>
+        <h2 className="text-2xl font-bold mt-1 flex items-center gap-2"><FaChild /> My Children</h2>
+        <p className="text-sm text-blue-100 mt-1">Track activity, attendance, development, milestones, and incidents from one colorful hub.</p>
+      </div>
+
       {loading ? (
         <div className="flex justify-center py-10"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /></div>
       ) : children.length === 0 ? (
-        <div className="rounded-2xl border-2 border-dashed border-gray-200 p-12 text-center">
+        <div className="rounded-2xl border-2 border-dashed border-gray-200 p-12 text-center bg-white">
           <FaChild className="mx-auto text-5xl text-gray-200 mb-4" />
           <p className="text-gray-500">No children enrolled yet.</p>
           <p className="text-xs text-gray-400 mt-1">Ask your school admin to enroll your child.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
           {children.map((child, i) => (
-            <div key={child.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4">
-              <div className="flex items-center gap-4">
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white text-xl font-bold shadow-md`}>
-                  {child.firstName[0]}{child.lastName[0]}
+            <div key={child.id} className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden hover:shadow-lg transition-shadow">
+              <div className={`h-2 bg-gradient-to-r ${AVATAR_COLORS[i % AVATAR_COLORS.length]}`} />
+              <div className="p-5 space-y-4 bg-gradient-to-br from-white via-sky-50/60 to-violet-50/60">
+                <div className="flex items-center gap-4">
+                  <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white text-2xl font-bold shadow-md`}>
+                    {child.firstName[0]}{child.lastName[0]}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-lg font-bold text-gray-900 truncate">{child.firstName} {child.lastName}</p>
+                    <p className="text-sm text-gray-600">{child.class?.name}{child.class?.section ? ` — Section ${child.class.section}` : ''}</p>
+                    <p className="text-xs text-gray-500 truncate">{child.school?.name}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-lg font-bold text-gray-800">{child.firstName} {child.lastName}</p>
-                  <p className="text-sm text-gray-500">{child.class?.name}{child.class?.section ? ` — Section ${child.class.section}` : ''}</p>
-                  <p className="text-xs text-gray-400">{child.school?.name}</p>
+
+                <div className="grid grid-cols-3 gap-2 text-center">
+                  <div className="rounded-xl bg-cyan-50 border border-cyan-100 py-2">
+                    <p className="text-[10px] font-semibold text-cyan-700 uppercase">Learning</p>
+                    <p className="text-sm font-bold text-cyan-800">Active</p>
+                  </div>
+                  <div className="rounded-xl bg-emerald-50 border border-emerald-100 py-2">
+                    <p className="text-[10px] font-semibold text-emerald-700 uppercase">Attendance</p>
+                    <p className="text-sm font-bold text-emerald-800">Track</p>
+                  </div>
+                  <div className="rounded-xl bg-violet-50 border border-violet-100 py-2">
+                    <p className="text-[10px] font-semibold text-violet-700 uppercase">Progress</p>
+                    <p className="text-sm font-bold text-violet-800">View</p>
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <button onClick={() => navigate(`/parent/feed/${child.id}`)} className="btn btn-primary btn-sm flex items-center justify-center gap-2"><FaCamera /> Activity Feed</button>
-                <button onClick={() => navigate(`/parent/attendance/${child.id}`)} className="btn btn-outline btn-sm flex items-center justify-center gap-2"><FaClipboardList /> Attendance</button>
-                <button onClick={() => navigate(`/parent/report/${child.id}`)} className="btn btn-outline btn-sm flex items-center justify-center gap-2"><FaBook /> Report</button>
-                <button onClick={() => navigate(`/parent/child/${child.id}`)} className="btn btn-outline btn-sm flex items-center justify-center gap-2">Profile <FaArrowRight size={10} /></button>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button onClick={() => { setActivityChildId(child.id); setActiveSection('activity'); }} className="rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-2.5 flex items-center justify-center gap-1.5 transition"><FaCamera /> Activity</button>
+                  <button onClick={() => { setAttendanceChildId(child.id); setActiveSection('attendance'); }} className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold px-3 py-2.5 flex items-center justify-center gap-1.5 transition"><FaClipboardList /> Attendance</button>
+                  <button onClick={() => { setReportChildId(child.id); setActiveSection('report'); }} className="rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-xs font-semibold px-3 py-2.5 flex items-center justify-center gap-1.5 transition"><FaBook /> Reports</button>
+                  <button onClick={() => { setMedicalChildId(child.id); setActiveSection('medical'); }} className="rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold px-3 py-2.5 flex items-center justify-center gap-1.5 transition"><FaStethoscope /> Medical</button>
+                  <button onClick={() => { setMsChildId(child.id); setMsFilter(''); setActiveSection('milestones'); }} className="rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-2.5 flex items-center justify-center gap-1.5 transition"><FaGraduationCap /> Milestones</button>
+                  <button onClick={() => { setIncChildId(child.id); setIncFilter(''); setActiveSection('incidents'); }} className="rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold px-3 py-2.5 flex items-center justify-center gap-1.5 transition"><FaExclamationTriangle /> Incidents</button>
+                  <button onClick={() => { setProfileChildId(child.id); setActiveSection('profile'); }} className="rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold px-3 py-2.5 flex items-center justify-center gap-1.5 transition">Profile <FaArrowRight size={10} /></button>
+                </div>
               </div>
             </div>
           ))}
@@ -471,6 +738,605 @@ export default function ParentDashboard() {
       )}
     </div>
   );
+
+  const renderProfile = () => {
+    const selectedChild = children.find((child) => child.id === profileChildId);
+    const student = profileStudent || selectedChild;
+
+    const formatDate = (date) => {
+      if (!date) return 'N/A';
+      return new Date(date).toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      });
+    };
+
+    const calculateAge = (dob) => {
+      if (!dob) return 'N/A';
+      const today = new Date();
+      const birthDate = new Date(dob);
+      let age = today.getFullYear() - birthDate.getFullYear();
+      const monthDiff = today.getMonth() - birthDate.getMonth();
+      if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) age--;
+      return age;
+    };
+
+    return (
+      <div className="space-y-5">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FaUser className="text-sky-500" /> Child Profile</h2>
+
+        {renderSectionChildPicker(
+          profileChildId,
+          setProfileChildId,
+          'bg-sky-600 text-white border-sky-600 shadow',
+          'bg-white text-slate-700 border-slate-200 hover:bg-sky-50'
+        )}
+
+        {profileLoading ? (
+          <div className="flex justify-center py-12 bg-white rounded-3xl border border-slate-200"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-sky-500" /></div>
+        ) : !student ? (
+          <div className="rounded-3xl border border-dashed border-slate-200 p-10 text-center bg-white">
+            <p className="text-slate-500">Child profile not available.</p>
+          </div>
+        ) : (
+          <>
+            <div className="bg-gradient-to-r from-sky-600 to-cyan-600 rounded-3xl p-6 text-white shadow-sm">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <p className="text-sky-100 text-sm">Student Profile</p>
+                  <h3 className="text-3xl font-bold mt-1">{student.firstName} {student.lastName}</h3>
+                  <p className="text-sky-100 text-sm mt-1">Enrollment #: {student.enrollmentNumber || 'N/A'}</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-4xl font-bold">{calculateAge(student.dateOfBirth)}</div>
+                  <p className="text-sky-100 text-sm">years old</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+              <div className="lg:col-span-2 space-y-5">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">Basic Information</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div><p className="text-slate-500">Date of Birth</p><p className="font-semibold text-slate-800">{formatDate(student.dateOfBirth)}</p></div>
+                    <div><p className="text-slate-500">Enrollment Date</p><p className="font-semibold text-slate-800">{formatDate(student.enrollmentDate)}</p></div>
+                    <div><p className="text-slate-500">Status</p><p className="font-semibold text-slate-800">{student.isActive ? 'Active' : 'Inactive'}</p></div>
+                    <div><p className="text-slate-500">Age</p><p className="font-semibold text-slate-800">{calculateAge(student.dateOfBirth)} years</p></div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4 flex items-center gap-2"><FaSchool className="text-emerald-600" /> School & Class</h3>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div><p className="text-slate-500">School</p><p className="font-semibold text-slate-800">{student.school?.name || 'N/A'}</p></div>
+                    <div><p className="text-slate-500">Class</p><p className="font-semibold text-slate-800">{student.class?.name || 'N/A'} {student.class?.section || ''}</p></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-5">
+                <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5">
+                  <h3 className="text-lg font-bold text-slate-900 mb-4">Quick Actions</h3>
+                  <div className="space-y-2.5">
+                    <button onClick={() => { setActivityChildId(student.id); setActiveSection('activity'); }} className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold px-4 py-3 flex items-center justify-center gap-2 transition"><FaCamera /> Activity Feed</button>
+                    <button onClick={() => { setAttendanceChildId(student.id); setActiveSection('attendance'); }} className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-3 flex items-center justify-center gap-2 transition"><FaClipboardList /> Attendance</button>
+                    <button onClick={() => { setReportChildId(student.id); setActiveSection('report'); }} className="w-full rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-semibold px-4 py-3 flex items-center justify-center gap-2 transition"><FaBook /> Reports</button>
+                    <button onClick={() => { setMedicalChildId(student.id); setActiveSection('medical'); }} className="w-full rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-sm font-semibold px-4 py-3 flex items-center justify-center gap-2 transition"><FaStethoscope /> Medical Form</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
+
+  const renderMedical = () => {
+    const selectedChild = children.find((child) => child.id === medicalChildId);
+
+    return (
+      <div className="space-y-5">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FaStethoscope className="text-rose-500" /> Medical Form</h2>
+
+        {renderSectionChildPicker(
+          medicalChildId,
+          setMedicalChildId,
+          'bg-rose-600 text-white border-rose-600 shadow',
+          'bg-white text-slate-700 border-slate-200 hover:bg-rose-50'
+        )}
+
+        {selectedChild && (
+          <div className="bg-gradient-to-r from-rose-500 to-orange-500 rounded-3xl p-5 text-white shadow-sm">
+            <p className="text-rose-100 text-sm">Medical history for</p>
+            <p className="text-2xl font-bold">{selectedChild.firstName} {selectedChild.lastName}</p>
+            <p className="text-sm text-rose-100 mt-1">Use the toggles for quick yes/no answers and add details only where needed.</p>
+          </div>
+        )}
+
+        {medicalLoading ? (
+          <div className="flex justify-center py-12 bg-white rounded-3xl border border-slate-200"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500" /></div>
+        ) : (
+          <div className="space-y-5">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {MEDICAL_TOGGLES.map((item) => (
+                <div key={item.key} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-800">{item.label}</p>
+                    <button
+                      type="button"
+                      onClick={() => setMedicalForm((prev) => ({ ...prev, [item.key]: !prev[item.key] }))}
+                      className={`relative inline-flex h-7 w-12 items-center rounded-full transition ${medicalForm[item.key] ? 'bg-rose-500' : 'bg-slate-300'}`}
+                    >
+                      <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition ${medicalForm[item.key] ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                  </div>
+                  {item.detailKey && medicalForm[item.key] && (
+                    <textarea
+                      rows={3}
+                      value={medicalForm[item.detailKey]}
+                      onChange={(e) => setMedicalForm((prev) => ({ ...prev, [item.detailKey]: e.target.value }))}
+                      placeholder={item.detailLabel}
+                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-200 resize-none"
+                    />
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+                <h3 className="text-sm font-bold text-slate-900">Emergency & Health Details</h3>
+                <input value={medicalForm.bloodGroup} onChange={(e) => setMedicalForm((prev) => ({ ...prev, bloodGroup: e.target.value }))} placeholder="Blood Group" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                <input value={medicalForm.doctorName} onChange={(e) => setMedicalForm((prev) => ({ ...prev, doctorName: e.target.value }))} placeholder="Doctor Name" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                <input value={medicalForm.doctorPhone} onChange={(e) => setMedicalForm((prev) => ({ ...prev, doctorPhone: e.target.value }))} placeholder="Doctor Phone" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                <input value={medicalForm.hospitalPreference} onChange={(e) => setMedicalForm((prev) => ({ ...prev, hospitalPreference: e.target.value }))} placeholder="Preferred Hospital" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+                <input value={medicalForm.insuranceProvider} onChange={(e) => setMedicalForm((prev) => ({ ...prev, insuranceProvider: e.target.value }))} placeholder="Insurance Provider" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm" />
+              </div>
+
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 space-y-3">
+                <h3 className="text-sm font-bold text-slate-900">Additional Notes</h3>
+                <textarea
+                  rows={10}
+                  value={medicalForm.additionalNotes}
+                  onChange={(e) => setMedicalForm((prev) => ({ ...prev, additionalNotes: e.target.value }))}
+                  placeholder="Add any important medical history, doctor instructions, triggers, precautions, or other notes..."
+                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-rose-200 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={saveMedicalData}
+                disabled={medicalSaving || !medicalChildId}
+                className="rounded-2xl bg-rose-600 hover:bg-rose-700 disabled:opacity-60 text-white px-6 py-3 text-sm font-bold shadow-sm transition"
+              >
+                {medicalSaving ? 'Saving…' : 'Save Medical Form'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderActivity = () => {
+    const selectedChild = children.find((c) => c.id === activityChildId);
+    const filteredActivities = activityFilter === 'all'
+      ? activityItems
+      : activityItems.filter((item) => String(item.activityType || '').toLowerCase() === activityFilter);
+
+    return (
+      <div className="space-y-5">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FaCamera className="text-blue-500" /> Activity Feed</h2>
+
+        {renderSectionChildPicker(
+          activityChildId,
+          setActivityChildId,
+          'bg-blue-600 text-white border-blue-600 shadow',
+          'bg-white text-slate-700 border-slate-200 hover:bg-blue-50'
+        )}
+
+        {selectedChild && (
+          <div className="bg-gradient-to-r from-blue-600 to-cyan-600 rounded-3xl p-5 text-white">
+            <p className="text-sm text-blue-100">Showing latest activity for</p>
+            <p className="text-2xl font-bold">{selectedChild.firstName} {selectedChild.lastName}</p>
+          </div>
+        )}
+
+        <div className="flex flex-wrap gap-2">
+          {['all', 'general', 'respective', 'class_note'].map((type) => (
+            <button
+              key={type}
+              onClick={() => setActivityFilter(type)}
+              className={`rounded-full px-4 py-1.5 text-xs font-semibold border transition ${activityFilter === type ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}
+            >
+              {type === 'all' ? 'All' : type === 'class_note' ? 'Homework' : type.charAt(0).toUpperCase() + type.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {activityLoading ? (
+          <div className="flex justify-center py-12 bg-white rounded-3xl border border-slate-200"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500" /></div>
+        ) : filteredActivities.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-slate-200 p-10 text-center bg-white">
+            <p className="text-slate-500">No activities available for this child.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {filteredActivities.slice(0, 12).map((activity) => {
+              const type = String(activity.activityType || '').toLowerCase();
+              const isClassNote = type === 'class_note';
+              const detailsText = isClassNote
+                ? (activity.notes || activity.description || activity.caption || 'No homework details provided')
+                : (activity.description || activity.notes || activity.caption || 'No notes provided');
+
+              return (
+              <div key={activity.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800 capitalize">
+                      {isClassNote ? (activity.caption || 'Homework & Notes') : (activity.activityType || 'activity')}
+                    </p>
+                    <p className={`text-xs mt-0.5 ${isClassNote ? 'text-slate-700 whitespace-pre-wrap leading-5' : 'text-slate-500'}`}>
+                      {detailsText}
+                    </p>
+                  </div>
+                  <span className="text-[11px] text-slate-400 whitespace-nowrap">{new Date(activity.createdAt).toLocaleString()}</span>
+                </div>
+
+                {activity.mediaUrl && (
+                  <div className="mt-3">
+                    {String(activity.mediaType || '').toLowerCase().startsWith('video') ? (
+                      <video
+                        src={activity.mediaUrl}
+                        controls
+                        className="w-full max-w-md rounded-2xl border border-slate-200 bg-black"
+                      />
+                    ) : (
+                      <img
+                        src={activity.mediaUrl}
+                        alt={activity.caption || 'Activity media'}
+                        className="w-full max-w-md rounded-2xl border border-slate-200 object-cover"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+            )})}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderAttendance = () => {
+    const selectedChild = children.find((c) => c.id === attendanceChildId);
+    const total = attendanceItems.length;
+    const present = attendanceItems.filter((item) => item.status === 'present').length;
+    const absent = attendanceItems.filter((item) => item.status === 'absent').length;
+    const late = attendanceItems.filter((item) => item.status === 'late').length;
+
+    return (
+      <div className="space-y-5">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FaClipboardList className="text-indigo-500" /> Attendance</h2>
+
+        {renderSectionChildPicker(
+          attendanceChildId,
+          setAttendanceChildId,
+          'bg-indigo-600 text-white border-indigo-600 shadow',
+          'bg-white text-slate-700 border-slate-200 hover:bg-indigo-50'
+        )}
+
+        {selectedChild && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4"><p className="text-xs text-slate-500">Total</p><p className="text-2xl font-bold text-slate-800">{total}</p></div>
+            <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-4"><p className="text-xs text-emerald-600">Present</p><p className="text-2xl font-bold text-emerald-700">{present}</p></div>
+            <div className="bg-rose-50 rounded-2xl border border-rose-200 p-4"><p className="text-xs text-rose-600">Absent</p><p className="text-2xl font-bold text-rose-700">{absent}</p></div>
+            <div className="bg-amber-50 rounded-2xl border border-amber-200 p-4"><p className="text-xs text-amber-600">Late</p><p className="text-2xl font-bold text-amber-700">{late}</p></div>
+          </div>
+        )}
+
+        {attendanceLoading ? (
+          <div className="flex justify-center py-12 bg-white rounded-3xl border border-slate-200"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500" /></div>
+        ) : attendanceItems.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-slate-200 p-10 text-center bg-white">
+            <p className="text-slate-500">No attendance records for this child.</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 overflow-x-auto">
+            <table className="table w-full">
+              <thead>
+                <tr><th>Date</th><th>Status</th><th>Check In</th><th>Check Out</th></tr>
+              </thead>
+              <tbody>
+                {attendanceItems.slice(0, 20).map((item) => (
+                  <tr key={item.id}>
+                    <td>{new Date(item.date).toLocaleDateString()}</td>
+                    <td className="capitalize">{String(item.status || '').replace('_', ' ')}</td>
+                    <td>{item.checkInTime ? new Date(item.checkInTime).toLocaleTimeString() : '-'}</td>
+                    <td>{item.checkOutTime ? new Date(item.checkOutTime).toLocaleTimeString() : '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderReport = () => {
+    const selectedChild = children.find((c) => c.id === reportChildId);
+    const MONTHS_FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const THIS_YEAR = new Date().getFullYear();
+    const YEAR_OPTS = [THIS_YEAR - 1, THIS_YEAR];
+
+    const DOMAIN_CFG = {
+      social:    { label: 'Social Skills',  grad: 'from-violet-500 to-purple-600', light: 'bg-violet-50', border: 'border-violet-200', text: 'text-violet-700' },
+      emotional: { label: 'Emotional',      grad: 'from-pink-500 to-rose-600',     light: 'bg-pink-50',   border: 'border-pink-200',   text: 'text-pink-700' },
+      motor:     { label: 'Motor Skills',   grad: 'from-blue-500 to-cyan-600',     light: 'bg-blue-50',   border: 'border-blue-200',   text: 'text-blue-700' },
+      language:  { label: 'Language',       grad: 'from-emerald-500 to-teal-600',  light: 'bg-emerald-50',border: 'border-emerald-200',text: 'text-emerald-700' },
+      cognitive: { label: 'Cognitive',      grad: 'from-amber-500 to-orange-600',  light: 'bg-amber-50',  border: 'border-amber-200',  text: 'text-amber-700' },
+    };
+    const RATING_CFG = {
+      emerging:   { label: 'Emerging',   bar: '25%',  barCls: 'bg-slate-400',   pill: 'bg-slate-100 text-slate-600' },
+      developing: { label: 'Developing', bar: '50%',  barCls: 'bg-blue-500',    pill: 'bg-blue-100 text-blue-700' },
+      proficient: { label: 'Proficient', bar: '75%',  barCls: 'bg-emerald-500', pill: 'bg-emerald-100 text-emerald-700' },
+      advanced:   { label: 'Advanced',   bar: '100%', barCls: 'bg-violet-500',  pill: 'bg-violet-100 text-violet-700' },
+    };
+    const INTAKE_LABEL = { full: 'Full plate', half: 'Half plate', refused: 'Refused' };
+    const MOOD_EMOJI   = { happy:'😊', calm:'😌', excited:'🤩', sad:'😢', anxious:'😟', tired:'😴', angry:'😡' };
+
+    const rpt   = reportDetail?.report;
+    const stats = reportDetail?.stats;
+    const teacher = reportDetail?.teacher;
+    const domains = Array.isArray(rpt?.domains) ? rpt.domains : [];
+
+    return (
+      <div className="space-y-5">
+        {/* Header row */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+            <FaBook className="text-violet-500" /> Monthly Reports
+          </h2>
+          {/* Month / Year pickers */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={reportSelMonth}
+              onChange={e => setReportSelMonth(Number(e.target.value))}
+              className="border border-slate-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-300"
+            >
+              {MONTHS_FULL.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+            </select>
+            <select
+              value={reportSelYear}
+              onChange={e => setReportSelYear(Number(e.target.value))}
+              className="border border-slate-200 rounded-xl px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-violet-300"
+            >
+              {YEAR_OPTS.map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+        </div>
+
+        {/* Child picker */}
+        {renderSectionChildPicker(
+          reportChildId,
+          setReportChildId,
+          'bg-violet-600 text-white border-violet-600 shadow',
+          'bg-white text-slate-700 border-slate-200 hover:bg-violet-50'
+        )}
+
+        {reportLoading ? (
+          <div className="flex justify-center py-12 bg-white rounded-3xl border border-slate-200">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500" />
+          </div>
+        ) : reportList.length === 0 ? (
+          <div className="bg-white rounded-3xl border-2 border-dashed border-violet-100 p-14 text-center">
+            <FaBook className="mx-auto text-4xl text-violet-200 mb-3" />
+            <p className="font-semibold text-slate-600">No reports published yet</p>
+            <p className="text-sm text-slate-400 mt-1">Reports will appear here once the teacher publishes them</p>
+          </div>
+        ) : reportDetailLoading ? (
+          <div className="flex justify-center py-12 bg-white rounded-3xl border border-slate-200">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-violet-500" />
+          </div>
+        ) : !rpt ? (
+          <div className="bg-white rounded-3xl border-2 border-dashed border-slate-100 p-14 text-center">
+            <FaBook className="mx-auto text-4xl text-slate-200 mb-3" />
+            <p className="font-semibold text-slate-600">No report for {MONTHS_FULL[reportSelMonth - 1]} {reportSelYear}</p>
+            <p className="text-sm text-slate-400 mt-1">
+              Available months:&nbsp;
+              {reportList.map(r => `${MONTHS_FULL[r.month - 1]} ${r.year}`).join(', ')}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+
+            {/* Report header */}
+            <div className="bg-gradient-to-br from-violet-600 to-fuchsia-600 rounded-2xl p-5 text-white">
+              <div className="flex items-start justify-between flex-wrap gap-3">
+                <div>
+                  <p className="text-violet-200 text-xs font-medium uppercase tracking-wide">Monthly Development Report</p>
+                  <p className="text-2xl font-bold mt-0.5">{MONTHS_FULL[rpt.month - 1]} {rpt.year}</p>
+                  {selectedChild && <p className="text-violet-200 text-sm mt-1">{selectedChild.firstName} {selectedChild.lastName}</p>}
+                </div>
+                {teacher && (
+                  <div className="bg-white/15 backdrop-blur-sm rounded-2xl px-4 py-3 border border-white/20 text-right">
+                    <p className="text-violet-200 text-xs">Class Teacher</p>
+                    <p className="font-semibold text-sm">{teacher.firstName} {teacher.lastName}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Attendance */}
+            {stats && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="font-semibold text-slate-800 text-sm">Attendance</p>
+                  <span className={`text-2xl font-bold ${stats.attendance.attendancePct >= 85 ? 'text-emerald-600' : stats.attendance.attendancePct >= 70 ? 'text-amber-600' : 'text-rose-600'}`}>
+                    {stats.attendance.attendancePct}%
+                  </span>
+                </div>
+                <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-3">
+                  <div
+                    className={`h-full rounded-full ${stats.attendance.attendancePct >= 85 ? 'bg-emerald-500' : stats.attendance.attendancePct >= 70 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                    style={{ width: `${stats.attendance.attendancePct}%` }}
+                  />
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-center text-xs">
+                  <div className="bg-emerald-50 rounded-xl py-2"><div className="font-bold text-emerald-700 text-lg">{stats.attendance.presentDays}</div><div className="text-emerald-600">Present</div></div>
+                  <div className="bg-rose-50 rounded-xl py-2"><div className="font-bold text-rose-700 text-lg">{stats.attendance.absentDays}</div><div className="text-rose-600">Absent</div></div>
+                  <div className="bg-amber-50 rounded-xl py-2"><div className="font-bold text-amber-700 text-lg">{stats.attendance.lateDays}</div><div className="text-amber-600">Late</div></div>
+                </div>
+              </div>
+            )}
+
+            {/* Developmental Domains */}
+            {domains.length > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                <p className="font-semibold text-slate-800 mb-4">Developmental Progress</p>
+                <div className="space-y-3">
+                  {domains.map((d) => {
+                    const cfg = DOMAIN_CFG[d.domain];
+                    const rc  = RATING_CFG[d.rating] || RATING_CFG.developing;
+                    if (!cfg) return null;
+                    const achievedMs = (d.milestones || []).filter(m => m.isAchieved);
+                    return (
+                      <div key={d.domain} className={`rounded-2xl border p-4 ${cfg.light} ${cfg.border}`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className={`font-semibold text-sm ${cfg.text}`}>{cfg.label}</span>
+                          <span className={`text-xs font-medium px-2.5 py-0.5 rounded-full ${rc.pill}`}>{rc.label}</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-white/70 rounded-full overflow-hidden mb-2">
+                          <div className={`h-full rounded-full ${rc.barCls}`} style={{ width: rc.bar }} />
+                        </div>
+                        {d.notes && <p className="text-xs text-slate-600 leading-relaxed mb-2 bg-white/60 rounded-xl px-3 py-2">{d.notes}</p>}
+                        {achievedMs.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {achievedMs.map((m, i) => (
+                              <span key={i} className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700">
+                                ✓ {m.milestone}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Teacher's message */}
+            {rpt.overallSummary && (
+              <div className="bg-gradient-to-br from-violet-50 to-fuchsia-50 rounded-2xl border border-violet-200 p-5">
+                <p className="text-sm font-semibold text-slate-700 mb-2 flex items-center gap-1.5">⭐ Teacher's Message</p>
+                <p className="text-slate-700 text-sm leading-relaxed italic">"{rpt.overallSummary}"</p>
+                {teacher && <p className="text-xs text-violet-500 mt-2">— {teacher.firstName} {teacher.lastName}</p>}
+              </div>
+            )}
+
+            {/* Highlights / Growth / Activities */}
+            {(rpt.highlights?.length > 0 || rpt.areasForImprovement?.length > 0 || rpt.recommendedActivities?.length > 0) && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                {rpt.highlights?.length > 0 && (
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+                    <p className="text-xs font-semibold text-emerald-800 mb-2">✦ Highlights</p>
+                    <ul className="space-y-1.5">
+                      {rpt.highlights.map((h, i) => <li key={i} className="text-xs text-emerald-700">• {h}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {rpt.areasForImprovement?.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                    <p className="text-xs font-semibold text-amber-800 mb-2">🌱 Areas for Growth</p>
+                    <ul className="space-y-1.5">
+                      {rpt.areasForImprovement.map((a, i) => <li key={i} className="text-xs text-amber-700">• {a}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {rpt.recommendedActivities?.length > 0 && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+                    <p className="text-xs font-semibold text-blue-800 mb-2">🏠 Try at Home</p>
+                    <ul className="space-y-1.5">
+                      {rpt.recommendedActivities.map((a, i) => <li key={i} className="text-xs text-blue-700">• {a}</li>)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Mood / Nap / Meal mini stats */}
+            {stats && (
+              <div className="grid grid-cols-3 gap-3">
+                <div className="bg-white rounded-2xl border border-slate-100 p-3 text-center">
+                  <p className="text-lg">{MOOD_EMOJI[stats.mood.topArrivalMood] || '—'}</p>
+                  <p className="text-xs text-slate-500 mt-1">Top mood</p>
+                  <p className="text-xs font-semibold text-slate-700 capitalize">{stats.mood.topArrivalMood || 'No data'}</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-100 p-3 text-center">
+                  <p className="text-lg">🌙</p>
+                  <p className="text-xs text-slate-500 mt-1">Avg nap</p>
+                  <p className="text-xs font-semibold text-slate-700">{stats.nap.avgNapMin ? `${stats.nap.avgNapMin} min` : 'No data'}</p>
+                </div>
+                <div className="bg-white rounded-2xl border border-slate-100 p-3 text-center">
+                  <p className="text-lg">🍽️</p>
+                  <p className="text-xs text-slate-500 mt-1">Meal intake</p>
+                  <p className="text-xs font-semibold text-slate-700">{INTAKE_LABEL[stats.meal.topMealIntake] || 'No data'}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Milestones */}
+            {stats && stats.milestones.total > 0 && (
+              <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="font-semibold text-slate-800 text-sm">Milestones</p>
+                  <span className="text-xs text-slate-500">{stats.milestones.achieved} of {stats.milestones.total} achieved</span>
+                </div>
+                <div className="space-y-1.5">
+                  {stats.milestones.list.map((m, i) => (
+                    <div key={i} className={`flex items-center gap-2 text-xs rounded-xl px-3 py-2 ${m.isAchieved ? 'bg-emerald-50' : 'bg-slate-50'}`}>
+                      <span className={m.isAchieved ? 'text-emerald-500' : 'text-slate-300'}>●</span>
+                      <span className={m.isAchieved ? 'text-slate-700' : 'text-slate-400'}>{m.milestone}</span>
+                      <span className={`ml-auto capitalize ${m.isAchieved ? 'text-emerald-500' : 'text-slate-400'}`}>{m.domain}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Incidents */}
+            {stats && stats.incidents.count > 0 && (
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4">
+                <p className="text-sm font-semibold text-rose-700 mb-2">⚠ {stats.incidents.count} Incident{stats.incidents.count > 1 ? 's' : ''} this month</p>
+                <div className="space-y-2">
+                  {stats.incidents.list.map(inc => (
+                    <div key={inc.id} className="bg-white rounded-xl px-3 py-2 flex items-start justify-between gap-3">
+                      <div>
+                        <span className="text-xs font-medium text-slate-700 capitalize">{inc.incidentType}</span>
+                        {inc.description && <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{inc.description}</p>}
+                      </div>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${inc.severity === 'severe' ? 'bg-rose-100 text-rose-700' : inc.severity === 'moderate' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>
+                        {inc.severity}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderPickup = () => (
     <div className="space-y-5">
@@ -780,12 +1646,303 @@ export default function ParentDashboard() {
     );
   };
 
+  const MS_DOMAINS = [
+    { value: 'social',    label: 'Social',    color: 'pink',   iconColor: 'text-pink-500',    bg: 'bg-pink-50',   border: 'border-pink-200',   badge: 'bg-pink-100 text-pink-700'    },
+    { value: 'emotional', label: 'Emotional', color: 'purple', iconColor: 'text-purple-500',  bg: 'bg-purple-50', border: 'border-purple-200', badge: 'bg-purple-100 text-purple-700' },
+    { value: 'motor',     label: 'Motor',     color: 'green',  iconColor: 'text-emerald-500', bg: 'bg-emerald-50',border: 'border-emerald-200',badge: 'bg-emerald-100 text-emerald-700'},
+    { value: 'language',  label: 'Language',  color: 'blue',   iconColor: 'text-blue-500',    bg: 'bg-blue-50',   border: 'border-blue-200',   badge: 'bg-blue-100 text-blue-700'    },
+    { value: 'cognitive', label: 'Cognitive', color: 'yellow', iconColor: 'text-amber-500',   bg: 'bg-amber-50',  border: 'border-amber-200',  badge: 'bg-amber-100 text-amber-700'  },
+  ];
+
+  const loadMilestones = useCallback(async (childId) => {
+    if (!childId) return;
+    setMsLoading(true);
+    setMilestones([]);
+    try {
+      const res = await api.get(`/parent/child/${childId}/milestones`);
+      setMilestones(res.data || []);
+    } catch {
+      showToast('error', 'Failed to load milestones');
+    } finally {
+      setMsLoading(false);
+    }
+  }, [showToast]);
+
+  const loadIncidents = useCallback(async (childId) => {
+    if (!childId) return;
+    setIncLoading(true);
+    setIncidents([]);
+    try {
+      const res = await api.get(`/parent/child/${childId}/incidents`);
+      setIncidents(res.data || []);
+    } catch {
+      showToast('error', 'Failed to load incident reports');
+    } finally {
+      setIncLoading(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    if (msChildId) {
+      loadMilestones(msChildId);
+    }
+  }, [msChildId, loadMilestones]);
+
+  useEffect(() => {
+    if (incChildId) {
+      loadIncidents(incChildId);
+    }
+  }, [incChildId, loadIncidents]);
+
+  const renderMilestones = () => {
+    const filteredMs = msFilter ? milestones.filter((m) => m.domain === msFilter) : milestones;
+    const achieved = milestones.filter((m) => m.isAchieved).length;
+    const inProgress = milestones.filter((m) => !m.isAchieved).length;
+    return (
+      <div className="space-y-5">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <FaGraduationCap className="text-emerald-500" /> Milestone Progress
+        </h2>
+
+        {/* Child selector */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Select Child</label>
+          {loading ? (
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-emerald-500" />
+          ) : children.length === 0 ? (
+            <p className="text-sm text-slate-500">No children enrolled yet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {children.map((child, i) => (
+                <button
+                  key={child.id}
+                  onClick={() => { setMsChildId(child.id); setMsFilter(''); loadMilestones(child.id); }}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border transition ${msChildId === child.id ? 'bg-emerald-600 text-white border-emerald-600 shadow' : 'bg-white text-slate-700 border-slate-200 hover:bg-emerald-50'}`}
+                >
+                  <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white text-xs font-bold`}>
+                    {child.firstName[0]}
+                  </div>
+                  {child.firstName} {child.lastName}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {msChildId && (
+          <>
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 text-center">
+                <div className="text-2xl font-bold text-slate-800">{milestones.length}</div>
+                <div className="text-xs text-slate-500 mt-0.5">Total</div>
+              </div>
+              <div className="bg-emerald-50 rounded-2xl border border-emerald-200 shadow-sm p-4 text-center">
+                <div className="text-2xl font-bold text-emerald-700">{achieved}</div>
+                <div className="text-xs text-emerald-600 mt-0.5">Achieved ✓</div>
+              </div>
+              <div className="bg-amber-50 rounded-2xl border border-amber-200 shadow-sm p-4 text-center">
+                <div className="text-2xl font-bold text-amber-700">{inProgress}</div>
+                <div className="text-xs text-amber-600 mt-0.5">In Progress</div>
+              </div>
+            </div>
+
+            {/* Domain filter */}
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setMsFilter('')} className={`rounded-full px-4 py-1.5 text-xs font-semibold border transition ${msFilter === '' ? 'bg-emerald-600 text-white border-emerald-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>All</button>
+              {MS_DOMAINS.map((d) => (
+                <button key={d.value} onClick={() => setMsFilter(d.value)} className={`rounded-full px-4 py-1.5 text-xs font-semibold border transition ${msFilter === d.value ? `${d.bg} ${d.border} ${d.iconColor}` : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>{d.label}</button>
+              ))}
+            </div>
+
+            {/* List */}
+            {msLoading ? (
+              <div className="flex items-center justify-center py-14 bg-white rounded-3xl border border-slate-200 shadow-sm">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-emerald-500" />
+              </div>
+            ) : filteredMs.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-dashed border-slate-200 p-10 text-center">
+                <FaGraduationCap className="mx-auto text-4xl text-slate-300 mb-3" />
+                <p className="text-slate-500 font-medium">No milestones yet</p>
+                <p className="text-sm text-slate-400 mt-1">Your child's teacher will add milestones as they progress</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredMs.map((m) => {
+                  const dom = MS_DOMAINS.find((d) => d.value === m.domain) || MS_DOMAINS[0];
+                  return (
+                    <div key={m.id} className={`bg-white rounded-2xl border ${m.isAchieved ? 'border-emerald-200' : dom.border} shadow-sm p-4 flex gap-4 items-start`}>
+                      <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${m.isAchieved ? 'bg-emerald-100' : dom.bg}`}>
+                        <FaGraduationCap className={m.isAchieved ? 'text-emerald-600' : dom.iconColor} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                          <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${dom.badge}`}>{dom.label}</span>
+                          {m.isAchieved
+                            ? <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-100 text-emerald-700">✓ Achieved</span>
+                            : <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700">In Progress</span>}
+                        </div>
+                        <p className="text-sm font-semibold text-slate-800">{m.milestone}</p>
+                        {m.description && <p className="text-xs text-slate-500 mt-0.5">{m.description}</p>}
+                        <div className="flex flex-wrap gap-3 mt-1 text-xs text-slate-400">
+                          {m.teacherName && <span>By {m.teacherName}</span>}
+                          {m.achievedDate && <span>Achieved {new Date(m.achievedDate).toLocaleDateString()}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {!msChildId && children.length > 0 && (
+          <div className="bg-white rounded-3xl border border-dashed border-slate-200 p-10 text-center">
+            <FaGraduationCap className="mx-auto text-4xl text-slate-300 mb-3" />
+            <p className="text-slate-500 font-medium">Select a child above to view milestones</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const INC_SEVERITIES = [
+    { value: 'minor',    label: 'Minor',    bg: 'bg-amber-50',  border: 'border-amber-200',  badge: 'bg-amber-100 text-amber-700',   icon: 'text-amber-500'  },
+    { value: 'moderate', label: 'Moderate', bg: 'bg-orange-50', border: 'border-orange-200', badge: 'bg-orange-100 text-orange-700', icon: 'text-orange-500' },
+    { value: 'severe',   label: 'Severe',   bg: 'bg-rose-50',   border: 'border-rose-200',   badge: 'bg-rose-100 text-rose-700',     icon: 'text-rose-500'   },
+  ];
+
+  const renderIncidents = () => {
+    const filteredInc = incFilter ? incidents.filter((i) => i.severity === incFilter) : incidents;
+    return (
+      <div className="space-y-5">
+        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+          <FaExclamationTriangle className="text-rose-500" /> Incident Reports
+        </h2>
+
+        {/* Child selector */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+          <label className="block text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Select Child</label>
+          {loading ? (
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-rose-500" />
+          ) : children.length === 0 ? (
+            <p className="text-sm text-slate-500">No children enrolled yet.</p>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {children.map((child, i) => (
+                <button
+                  key={child.id}
+                  onClick={() => { setIncChildId(child.id); setIncFilter(''); loadIncidents(child.id); }}
+                  className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border transition ${incChildId === child.id ? 'bg-rose-600 text-white border-rose-600 shadow' : 'bg-white text-slate-700 border-slate-200 hover:bg-rose-50'}`}
+                >
+                  <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white text-xs font-bold`}>
+                    {child.firstName[0]}
+                  </div>
+                  {child.firstName} {child.lastName}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {incChildId && (
+          <>
+            {/* Stats */}
+            <div className="grid grid-cols-3 gap-3">
+              {INC_SEVERITIES.map((s) => {
+                const cnt = incidents.filter((i) => i.severity === s.value).length;
+                return (
+                  <div key={s.value} className={`rounded-2xl border ${s.border} ${s.bg} shadow-sm p-4 text-center`}>
+                    <div className={`text-2xl font-bold ${s.icon}`}>{cnt}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Severity filter */}
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setIncFilter('')} className={`rounded-full px-4 py-1.5 text-xs font-semibold border transition ${incFilter === '' ? 'bg-rose-600 text-white border-rose-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>All</button>
+              {INC_SEVERITIES.map((s) => (
+                <button key={s.value} onClick={() => setIncFilter(s.value)} className={`rounded-full px-4 py-1.5 text-xs font-semibold border transition ${incFilter === s.value ? `${s.bg} ${s.border} ${s.icon}` : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>{s.label}</button>
+              ))}
+            </div>
+
+            {/* List */}
+            {incLoading ? (
+              <div className="flex items-center justify-center py-14 bg-white rounded-3xl border border-slate-200 shadow-sm">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500" />
+              </div>
+            ) : filteredInc.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-dashed border-slate-200 p-10 text-center">
+                <FaExclamationTriangle className="mx-auto text-4xl text-slate-300 mb-3" />
+                <p className="text-slate-500 font-medium">No incident reports</p>
+                <p className="text-sm text-slate-400 mt-1">No incidents have been recorded for this child</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredInc.map((incident) => {
+                  const sev = INC_SEVERITIES.find((s) => s.value === incident.severity) || INC_SEVERITIES[0];
+                  return (
+                    <div key={incident.id} className={`bg-white rounded-2xl border ${sev.border} shadow-sm p-4`}>
+                      <div className="flex gap-4 items-start">
+                        <div className={`flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center ${sev.bg}`}>
+                          <FaExclamationTriangle className={sev.icon} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <span className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${sev.badge}`}>{sev.label}</span>
+                            <span className="text-sm font-bold text-slate-800">{incident.incidentType}</span>
+                            {incident.parentNotified && (
+                              <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 flex items-center gap-1">
+                                <FaBullhorn size={9} /> School Notified You
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-slate-700">{incident.description}</p>
+                          {incident.actionTaken && (
+                            <div className="mt-1.5 rounded-xl bg-slate-50 border border-slate-100 px-3 py-2 text-xs text-slate-600">
+                              <span className="font-semibold text-slate-700">Action taken: </span>{incident.actionTaken}
+                            </div>
+                          )}
+                          <div className="flex flex-wrap gap-3 mt-1.5 text-xs text-slate-400">
+                            <span className="flex items-center gap-1"><FaClock size={10} /> {new Date(incident.incidentTime).toLocaleString()}</span>
+                            {incident.teacherName && <span>Reported by {incident.teacherName}</span>}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+
+        {!incChildId && children.length > 0 && (
+          <div className="bg-white rounded-3xl border border-dashed border-slate-200 p-10 text-center">
+            <FaExclamationTriangle className="mx-auto text-4xl text-slate-300 mb-3" />
+            <p className="text-slate-500 font-medium">Select a child above to view incident reports</p>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderSection = () => {
     if (activeSection === 'home') return renderHome();
     if (activeSection === 'children') return renderChildren();
+    if (activeSection === 'profile') return renderProfile();
+    if (activeSection === 'activity') return renderActivity();
+    if (activeSection === 'attendance') return renderAttendance();
+    if (activeSection === 'report') return renderReport();
+    if (activeSection === 'medical') return renderMedical();
     if (activeSection === 'pickup') return renderPickup();
     if (activeSection === 'circulars') return renderCirculars();
     if (activeSection === 'ptm') return renderPtm();
+    if (activeSection === 'milestones') return renderMilestones();
+    if (activeSection === 'incidents') return renderIncidents();
     return null;
   };
 
@@ -793,41 +1950,6 @@ export default function ParentDashboard() {
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {/* Sidebar overlay (mobile) */}
       {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
-
-      {childPickerAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/55 px-4">
-          <div className="w-full max-w-xl rounded-3xl bg-white shadow-2xl overflow-hidden">
-            <div className="flex items-start justify-between gap-4 px-6 py-5 border-b border-gray-100">
-              <div>
-                <p className="text-lg font-bold text-gray-900">Select a Child</p>
-                <p className="text-sm text-gray-500 mt-1">Choose which child you want to open for {CHILD_ACTIONS[childPickerAction]?.label.toLowerCase()}.</p>
-              </div>
-              <button onClick={() => setChildPickerAction(null)} className="text-gray-400 hover:text-gray-600">
-                <FaTimes />
-              </button>
-            </div>
-            <div className="p-4 sm:p-6 space-y-3 max-h-[70vh] overflow-y-auto">
-              {children.map((child, index) => (
-                <button
-                  key={child.id}
-                  onClick={() => handleChildPick(child.id)}
-                  className="w-full rounded-2xl border border-gray-100 px-4 py-4 flex items-center gap-4 text-left hover:border-blue-200 hover:bg-blue-50 transition"
-                >
-                  <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${AVATAR_COLORS[index % AVATAR_COLORS.length]} flex items-center justify-center text-white text-lg font-bold shadow-md`}>
-                    {child.firstName[0]}{child.lastName[0]}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-gray-800 truncate">{child.firstName} {child.lastName}</p>
-                    <p className="text-sm text-gray-500 truncate">{child.class?.name}{child.class?.section ? ` · ${child.class.section}` : ''}</p>
-                    <p className="text-xs text-gray-400 truncate">{child.school?.name}</p>
-                  </div>
-                  <FaChevronRight className="text-gray-300" />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
       <Sidebar />
 

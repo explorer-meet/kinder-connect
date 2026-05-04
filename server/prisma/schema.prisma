@@ -161,6 +161,10 @@ model Student {
   dateOfBirth      DateTime?
   enrollmentNumber String?  @unique
   photo            String?
+  allergies        Json?
+  medicalNotes     String?  @db.Text
+  authorizedPickup Json?
+  medicalProfile   Json?
 
   // Family
   fatherFirstName  String?
@@ -357,16 +361,17 @@ model PTMSession {
 
 // PTM Slot: one 15-minute slot per student
 model PTMSlot {
-  id          String     @id @default(cuid())
-  sessionId   String
-  studentId   String
-  startTime   String
-  endTime     String
-  status      String     @default("scheduled")
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
+  id            String     @id @default(cuid())
+  sessionId     String
+  studentId     String
+  startTime     String
+  endTime       String
+  status        String     @default("scheduled")
+  teacherNotes  String?    @db.Text
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
 
-  session     PTMSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  session       PTMSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
 }
 
 model PTMRequest {

@@ -160,6 +160,103 @@ router.get('/attendance/batch/:batchId', auth, authorize(['teacher']), async (re
   }
 });
 
+// ===== Medical Records (Teacher) =====
+
+router.get('/medical/batch/:batchId', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const teacher = await prisma.user.findUnique({ where: { id: req.userId }, select: { schoolId: true } });
+    if (!teacher?.schoolId) {
+      return res.status(400).json({ error: 'Teacher is not assigned to a school' });
+    }
+
+    const batch = await prisma.batch.findUnique({
+      where: { id: req.params.batchId },
+      include: {
+        class: { select: { id: true, name: true, section: true } },
+        students: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            enrollmentNumber: true,
+            dateOfBirth: true,
+            isActive: true,
+            medicalProfile: true,
+            allergies: true,
+          },
+          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        },
+      },
+    });
+
+    if (!batch || batch.schoolId !== teacher.schoolId) {
+      return res.status(404).json({ error: 'Batch not found' });
+    }
+
+    const students = (batch.students || []).map((student) => {
+      const medicalProfile = student.medicalProfile || null;
+      const allergies = Array.isArray(student.allergies) ? student.allergies : [];
+      return {
+        ...student,
+        medicalProfile,
+        allergies,
+        hasMedicalData: Boolean(medicalProfile || allergies.length > 0),
+      };
+    });
+
+    res.json({
+      batch: {
+        id: batch.id,
+        shiftName: batch.shiftName,
+        class: batch.class,
+      },
+      students,
+    });
+  } catch (err) {
+    console.error('Teacher medical batch error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/medical/student/:studentId', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const teacher = await prisma.user.findUnique({ where: { id: req.userId }, select: { schoolId: true } });
+    if (!teacher?.schoolId) {
+      return res.status(400).json({ error: 'Teacher is not assigned to a school' });
+    }
+
+    const student = await prisma.student.findUnique({
+      where: { id: req.params.studentId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        enrollmentNumber: true,
+        dateOfBirth: true,
+        schoolId: true,
+        allergies: true,
+        medicalNotes: true,
+        medicalProfile: true,
+        class: { select: { id: true, name: true, section: true } },
+        batch: { select: { id: true, shiftName: true, startTime: true, endTime: true } },
+      },
+    });
+
+    if (!student || student.schoolId !== teacher.schoolId) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    res.json({
+      ...student,
+      allergies: Array.isArray(student.allergies) ? student.allergies : [],
+      medicalProfile: student.medicalProfile || null,
+    });
+  } catch (err) {
+    console.error('Teacher medical student error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.post('/attendance/mark', auth, authorize(['teacher']), async (req, res) => {
   try {
     const { batchId, date, records } = req.body;
@@ -296,49 +393,158 @@ router.post('/attendance/bulk', auth, authorize(['teacher']), async (req, res) =
   }
 });
 
-// Record Milestone
-router.post('/milestone', auth, authorize(['teacher']), async (req, res) => {
+// ===== Milestones (Prisma) =====
+
+// GET /teacher/milestones/batch/:batchId — list milestones for a batch (with optional studentId filter)
+router.get('/milestones/batch/:batchId', auth, authorize(['teacher']), async (req, res) => {
   try {
-    const { studentId, classId, domain, milestone, isAchieved } = req.body;
-    
-    const milestoneRecord = new Milestone({
-      studentId,
-      classId,
-      teacherId: req.userId,
-      domain,
-      milestone,
-      isAchieved,
-      achievedDate: isAchieved ? new Date() : null,
-      month: new Date().getMonth() + 1,
-      year: new Date().getFullYear(),
+    const where = { batchId: req.params.batchId };
+    if (req.query.studentId) where.studentId = req.query.studentId;
+    const milestones = await prisma.milestone.findMany({
+      where,
+      orderBy: [{ createdAt: 'desc' }],
     });
-    
-    await milestoneRecord.save();
-    res.status(201).json({ message: 'Milestone recorded', milestone: milestoneRecord });
+    // enrich with student names
+    const studentIds = [...new Set(milestones.map((m) => m.studentId))];
+    const students = studentIds.length
+      ? await prisma.student.findMany({ where: { id: { in: studentIds } }, select: { id: true, firstName: true, lastName: true } })
+      : [];
+    const sMap = Object.fromEntries(students.map((s) => [s.id, `${s.firstName} ${s.lastName}`]));
+    res.json(milestones.map((m) => ({ ...m, studentName: sMap[m.studentId] || 'Unknown' })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Create Incident Report
+// POST /teacher/milestone — create milestone
+router.post('/milestone', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const { studentId, batchId, domain, milestone, description, isAchieved, notes } = req.body;
+    if (!studentId || !batchId || !domain || !milestone) {
+      return res.status(400).json({ error: 'studentId, batchId, domain and milestone are required' });
+    }
+    const now = new Date();
+    const record = await prisma.milestone.create({
+      data: {
+        studentId,
+        batchId,
+        teacherId: req.userId,
+        domain,
+        milestone,
+        description: description || null,
+        isAchieved: !!isAchieved,
+        achievedDate: isAchieved ? now : null,
+        month: now.getMonth() + 1,
+        year: now.getFullYear(),
+        notes: notes || null,
+      },
+    });
+    res.status(201).json({ message: 'Milestone recorded', milestone: record });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /teacher/milestone/:id — update (e.g. mark achieved)
+router.patch('/milestone/:id', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const { isAchieved, notes, description } = req.body;
+    const data = {};
+    if (isAchieved !== undefined) {
+      data.isAchieved = !!isAchieved;
+      data.achievedDate = isAchieved ? new Date() : null;
+    }
+    if (notes !== undefined) data.notes = notes;
+    if (description !== undefined) data.description = description;
+    const updated = await prisma.milestone.update({ where: { id: req.params.id }, data });
+    res.json({ message: 'Milestone updated', milestone: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /teacher/milestone/:id
+router.delete('/milestone/:id', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    await prisma.milestone.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Milestone deleted' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ===== Incidents (Prisma) =====
+
+// GET /teacher/incidents/batch/:batchId — list incidents for a batch
+router.get('/incidents/batch/:batchId', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const where = { batchId: req.params.batchId };
+    if (req.query.studentId) where.studentId = req.query.studentId;
+    const incidents = await prisma.incidentReport.findMany({
+      where,
+      orderBy: [{ incidentTime: 'desc' }],
+    });
+    const studentIds = [...new Set(incidents.map((i) => i.studentId))];
+    const students = studentIds.length
+      ? await prisma.student.findMany({ where: { id: { in: studentIds } }, select: { id: true, firstName: true, lastName: true } })
+      : [];
+    const sMap = Object.fromEntries(students.map((s) => [s.id, `${s.firstName} ${s.lastName}`]));
+    res.json(incidents.map((i) => ({ ...i, studentName: sMap[i.studentId] || 'Unknown' })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /teacher/incident — create incident report
 router.post('/incident', auth, authorize(['teacher']), async (req, res) => {
   try {
-    const { studentId, classId, incidentType, description, severity, photo, actionTaken } = req.body;
-    
-    const incident = new IncidentReport({
-      studentId,
-      classId,
-      teacherId: req.userId,
-      incidentType,
-      description,
-      severity,
-      photo,
-      actionTaken,
-      parentNotified: false,
+    const { studentId, batchId, incidentType, description, severity, actionTaken, incidentTime } = req.body;
+    if (!studentId || !batchId || !incidentType || !description) {
+      return res.status(400).json({ error: 'studentId, batchId, incidentType and description are required' });
+    }
+    const incident = await prisma.incidentReport.create({
+      data: {
+        studentId,
+        batchId,
+        teacherId: req.userId,
+        incidentType,
+        description,
+        severity: severity || 'minor',
+        actionTaken: actionTaken || null,
+        parentNotified: false,
+        incidentTime: incidentTime ? new Date(incidentTime) : new Date(),
+      },
     });
-    
-    await incident.save();
     res.status(201).json({ message: 'Incident report created', incident });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /teacher/incident/:id — update incident
+router.patch('/incident/:id', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const { actionTaken, followUpRequired, followUpNotes, parentNotified } = req.body;
+    const data = {};
+    if (actionTaken !== undefined) data.actionTaken = actionTaken;
+    if (followUpRequired !== undefined) data.followUpRequired = followUpRequired;
+    if (followUpNotes !== undefined) data.followUpNotes = followUpNotes;
+    if (parentNotified !== undefined) {
+      data.parentNotified = !!parentNotified;
+      data.parentNotificationTime = parentNotified ? new Date() : null;
+    }
+    const updated = await prisma.incidentReport.update({ where: { id: req.params.id }, data });
+    res.json({ message: 'Incident updated', incident: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /teacher/incident/:id
+router.delete('/incident/:id', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    await prisma.incidentReport.delete({ where: { id: req.params.id } });
+    res.json({ message: 'Incident deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -476,13 +682,16 @@ router.post('/ptm/session', auth, authorize(['teacher']), async (req, res) => {
   }
 });
 
-// PATCH /teacher/ptm/slot/:slotId — update slot status
+// PATCH /teacher/ptm/slot/:slotId — update slot status and/or teacher notes
 router.patch('/ptm/slot/:slotId', auth, authorize(['teacher']), async (req, res) => {
   try {
-    const { status } = req.body;
+    const { status, teacherNotes } = req.body;
+    const data = {};
+    if (status !== undefined) data.status = status;
+    if (teacherNotes !== undefined) data.teacherNotes = teacherNotes;
     const slot = await prisma.pTMSlot.update({
       where: { id: req.params.slotId },
-      data: { status },
+      data,
     });
     res.json(slot);
   } catch (err) {

@@ -3,7 +3,7 @@ import TeacherPortalLayout from '../../components/TeacherPortalLayout';
 import api from '../../api/api';
 import {
   FaCalendarAlt, FaPlus, FaTimes, FaClock, FaTrash, FaUsers,
-  FaMapMarkerAlt, FaCheckCircle, FaBan, FaChevronDown, FaChevronUp,
+  FaMapMarkerAlt, FaCheckCircle, FaBan, FaChevronDown, FaChevronUp, FaStickyNote, FaSave,
 } from 'react-icons/fa';
 
 const statusColors = {
@@ -26,6 +26,9 @@ export default function PTMManagement() {
     selectedStudentIds: [],
   });
   const [submitting, setSubmitting] = useState(false);
+  // slotNotes: { [slotId]: string } — draft notes per slot
+  const [slotNotes, setSlotNotes] = useState({});
+  const [savingNote, setSavingNote] = useState({});
 
   const showToast = (type, text) => {
     setToast({ type, text });
@@ -140,6 +143,21 @@ export default function PTMManagement() {
       await api.patch(`/teacher/ptm/slot/${slotId}`, { status });
       loadSessions();
     } catch { showToast('error', 'Failed to update slot'); }
+  };
+
+  const handleSaveNote = async (slotId) => {
+    const note = slotNotes[slotId];
+    if (note === undefined) return;
+    setSavingNote((prev) => ({ ...prev, [slotId]: true }));
+    try {
+      await api.patch(`/teacher/ptm/slot/${slotId}`, { teacherNotes: note });
+      showToast('success', 'Note saved');
+      loadSessions();
+    } catch {
+      showToast('error', 'Failed to save note');
+    } finally {
+      setSavingNote((prev) => ({ ...prev, [slotId]: false }));
+    }
   };
 
   const handleDeleteSession = async (sessionId) => {
@@ -314,32 +332,57 @@ export default function PTMManagement() {
                       {sess.notes && <p className="text-sm text-gray-600 italic">{sess.notes}</p>}
                       <div className="space-y-2">
                         {sess.slots.map((slot) => (
-                          <div key={slot.id} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-                            <FaClock className="text-gray-400 shrink-0" />
-                            <div className="flex-1 min-w-0">
-                              <span className="text-sm font-medium text-gray-800">{slot.startTime} – {slot.endTime}</span>
-                              <span className="text-xs text-gray-500 ml-2">{slot.studentName || 'Unknown Student'}</span>
+                          <div key={slot.id} className={`rounded-xl border ${slot.status === 'completed' ? 'border-emerald-200 bg-emerald-50' : 'border-gray-100 bg-gray-50'} px-4 py-3 space-y-3`}>
+                            <div className="flex items-center gap-3">
+                              <FaClock className="text-gray-400 shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-sm font-medium text-gray-800">{slot.startTime} – {slot.endTime}</span>
+                                <span className="text-xs text-gray-500 ml-2">{slot.studentName || 'Unknown Student'}</span>
+                              </div>
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${statusColors[slot.status] || 'bg-gray-100 text-gray-600'}`}>
+                                {slot.status}
+                              </span>
+                              <div className="flex gap-1">
+                                {slot.status !== 'completed' && (
+                                  <button onClick={() => handleSlotStatus(slot.id, 'completed')} className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-500 hover:text-emerald-700 transition-colors" title="Mark completed">
+                                    <FaCheckCircle size={14} />
+                                  </button>
+                                )}
+                                {slot.status !== 'cancelled' && (
+                                  <button onClick={() => handleSlotStatus(slot.id, 'cancelled')} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors" title="Cancel slot">
+                                    <FaBan size={14} />
+                                  </button>
+                                )}
+                                {slot.status === 'cancelled' && (
+                                  <button onClick={() => handleSlotStatus(slot.id, 'scheduled')} className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-400 hover:text-blue-600 transition-colors" title="Reset to scheduled">
+                                    <FaCalendarAlt size={14} />
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${statusColors[slot.status] || 'bg-gray-100 text-gray-600'}`}>
-                              {slot.status}
-                            </span>
-                            <div className="flex gap-1">
-                              {slot.status !== 'completed' && (
-                                <button onClick={() => handleSlotStatus(slot.id, 'completed')} className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-500 hover:text-emerald-700 transition-colors" title="Mark completed">
-                                  <FaCheckCircle size={14} />
+
+                            {slot.status === 'completed' && (
+                              <div className="space-y-2 pl-6">
+                                <label className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700 uppercase tracking-wide">
+                                  <FaStickyNote size={11} /> Teacher Notes (private)
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  placeholder="Add your notes for this child's PTM discussion..."
+                                  className="w-full text-sm rounded-xl border border-emerald-200 bg-white px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300 resize-none"
+                                  value={slotNotes[slot.id] !== undefined ? slotNotes[slot.id] : (slot.teacherNotes || '')}
+                                  onChange={(e) => setSlotNotes((prev) => ({ ...prev, [slot.id]: e.target.value }))}
+                                />
+                                <button
+                                  onClick={() => handleSaveNote(slot.id)}
+                                  disabled={savingNote[slot.id]}
+                                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-colors disabled:opacity-60"
+                                >
+                                  {savingNote[slot.id] ? <span className="animate-spin rounded-full h-3 w-3 border-b border-white" /> : <FaSave size={11} />}
+                                  {savingNote[slot.id] ? 'Saving…' : 'Save Note'}
                                 </button>
-                              )}
-                              {slot.status !== 'cancelled' && (
-                                <button onClick={() => handleSlotStatus(slot.id, 'cancelled')} className="p-1.5 rounded-lg hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors" title="Cancel slot">
-                                  <FaBan size={14} />
-                                </button>
-                              )}
-                              {slot.status !== 'scheduled' && (
-                                <button onClick={() => handleSlotStatus(slot.id, 'scheduled')} className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-400 hover:text-blue-600 transition-colors" title="Reset to scheduled">
-                                  <FaCalendarAlt size={14} />
-                                </button>
-                              )}
-                            </div>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>

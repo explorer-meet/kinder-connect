@@ -4,6 +4,31 @@ const prisma = require('../src/lib/prisma');
 
 const router = express.Router();
 
+const parseJsonValue = (value, fallback = null) => {
+  if (value === null || value === undefined) return fallback;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return fallback;
+    }
+  }
+  return value;
+};
+
+const parseJsonArray = (value) => {
+  const parsed = parseJsonValue(value, []);
+  return Array.isArray(parsed) ? parsed : [];
+};
+
+const formatStudent = (student) => ({
+  ...student,
+  parentIds: parseJsonArray(student.parentIds),
+  allergies: parseJsonArray(student.allergies),
+  authorizedPickup: parseJsonArray(student.authorizedPickup),
+  medicalProfile: parseJsonValue(student.medicalProfile, null),
+});
+
 // Create Student (Admin only)
 router.post('/', auth, authorize(['admin']), async (req, res) => {
   try {
@@ -31,10 +56,11 @@ router.post('/', auth, authorize(['admin']), async (req, res) => {
         enrollmentNumber: enrollmentNumber || `STU-${Date.now()}`,
         classId,
         schoolId,
-        parentIds: parentIds ? JSON.stringify(parentIds) : null,
-        allergies: allergies ? JSON.stringify(allergies) : null,
+        parentIds: parentIds || null,
+        allergies: allergies || null,
         medicalNotes,
-        authorizedPickup: authorizedPickup ? JSON.stringify(authorizedPickup) : null,
+        authorizedPickup: authorizedPickup || null,
+        medicalProfile: req.body.medicalProfile || null,
       },
       include: {
         class: true,
@@ -44,12 +70,7 @@ router.post('/', auth, authorize(['admin']), async (req, res) => {
 
     res.status(201).json({
       message: 'Student created successfully',
-      student: {
-        ...student,
-        parentIds: student.parentIds ? JSON.parse(student.parentIds) : [],
-        allergies: student.allergies ? JSON.parse(student.allergies) : [],
-        authorizedPickup: student.authorizedPickup ? JSON.parse(student.authorizedPickup) : [],
-      },
+      student: formatStudent(student),
     });
   } catch (err) {
     console.error('Create student error:', err);
@@ -81,7 +102,7 @@ router.get('/:studentId', auth, async (req, res) => {
       return res.status(403).json({ error: 'Not authorized to view this student' });
     }
 
-    res.json(student);
+    res.json(formatStudent(student));
   } catch (err) {
     console.error('Get student error:', err);
     res.status(500).json({ error: err.message });
@@ -160,6 +181,85 @@ router.get('/parent/child/:studentId/attendance', auth, authorize(['parent']), a
   }
 });
 
+// Get medical profile for a child (parent only)
+router.get('/parent/child/:studentId/medical-profile', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const student = await prisma.student.findUnique({
+      where: { id: req.params.studentId },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        parentIds: true,
+        allergies: true,
+        medicalNotes: true,
+        medicalProfile: true,
+      },
+    });
+
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const parentIds = parseJsonArray(student.parentIds);
+    if (!parentIds.includes(req.userId)) {
+      return res.status(403).json({ error: 'Not authorized to view this medical profile' });
+    }
+
+    res.json({
+      student: formatStudent(student),
+      medicalProfile: parseJsonValue(student.medicalProfile, null),
+    });
+  } catch (err) {
+    console.error('Get child medical profile error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update medical profile for a child (parent only)
+router.put('/parent/child/:studentId/medical-profile', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const { medicalProfile, allergies, medicalNotes } = req.body;
+
+    const student = await prisma.student.findUnique({
+      where: { id: req.params.studentId },
+      select: { id: true, parentIds: true },
+    });
+
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const parentIds = parseJsonArray(student.parentIds);
+    if (!parentIds.includes(req.userId)) {
+      return res.status(403).json({ error: 'Not authorized to update this medical profile' });
+    }
+
+    const updatedStudent = await prisma.student.update({
+      where: { id: req.params.studentId },
+      data: {
+        medicalProfile: medicalProfile || null,
+        allergies: allergies || null,
+        medicalNotes: medicalNotes !== undefined ? medicalNotes : null,
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        parentIds: true,
+        allergies: true,
+        medicalNotes: true,
+        medicalProfile: true,
+      },
+    });
+
+    res.json({
+      message: 'Medical profile updated successfully',
+      student: formatStudent(updatedStudent),
+      medicalProfile: parseJsonValue(updatedStudent.medicalProfile, null),
+    });
+  } catch (err) {
+    console.error('Update child medical profile error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get All Students in School (Admin only)
 router.get('/school/:schoolId', auth, authorize(['admin']), async (req, res) => {
   try {
@@ -171,12 +271,7 @@ router.get('/school/:schoolId', auth, authorize(['admin']), async (req, res) => 
       },
     });
 
-    const formattedStudents = students.map(s => ({
-      ...s,
-      parentIds: s.parentIds ? JSON.parse(s.parentIds) : [],
-      allergies: s.allergies ? JSON.parse(s.allergies) : [],
-      authorizedPickup: s.authorizedPickup ? JSON.parse(s.authorizedPickup) : [],
-    }));
+    const formattedStudents = students.map((s) => formatStudent(s));
 
     res.json(formattedStudents);
   } catch (err) {
@@ -188,7 +283,7 @@ router.get('/school/:schoolId', auth, authorize(['admin']), async (req, res) => 
 // Update Student Profile (Admin or Parent)
 router.put('/:studentId', auth, async (req, res) => {
   try {
-    const { allergies, medicalNotes, authorizedPickup } = req.body;
+    const { allergies, medicalNotes, authorizedPickup, medicalProfile } = req.body;
 
     const student = await prisma.student.findUnique({
       where: { id: req.params.studentId },
@@ -199,16 +294,17 @@ router.put('/:studentId', auth, async (req, res) => {
     }
 
     // Authorization check
-    if (req.userRole !== 'admin' && (!student.parentIds || !JSON.parse(student.parentIds).includes(req.userId))) {
+    if (req.userRole !== 'admin' && !parseJsonArray(student.parentIds).includes(req.userId)) {
       return res.status(403).json({ error: 'Not authorized to update this student' });
     }
 
     const updatedStudent = await prisma.student.update({
       where: { id: req.params.studentId },
       data: {
-        allergies: allergies ? JSON.stringify(allergies) : student.allergies,
+        allergies: allergies !== undefined ? allergies : student.allergies,
         medicalNotes: medicalNotes !== undefined ? medicalNotes : student.medicalNotes,
-        authorizedPickup: authorizedPickup ? JSON.stringify(authorizedPickup) : student.authorizedPickup,
+        authorizedPickup: authorizedPickup !== undefined ? authorizedPickup : student.authorizedPickup,
+        medicalProfile: medicalProfile !== undefined ? medicalProfile : student.medicalProfile,
       },
       include: {
         class: true,
@@ -218,12 +314,7 @@ router.put('/:studentId', auth, async (req, res) => {
 
     res.json({
       message: 'Student updated successfully',
-      student: {
-        ...updatedStudent,
-        parentIds: updatedStudent.parentIds ? JSON.parse(updatedStudent.parentIds) : [],
-        allergies: updatedStudent.allergies ? JSON.parse(updatedStudent.allergies) : [],
-        authorizedPickup: updatedStudent.authorizedPickup ? JSON.parse(updatedStudent.authorizedPickup) : [],
-      },
+      student: formatStudent(updatedStudent),
     });
   } catch (err) {
     console.error('Update student error:', err);
@@ -248,7 +339,7 @@ router.post('/:studentId/add-parent', auth, authorize(['admin']), async (req, re
       return res.status(404).json({ error: 'Student not found' });
     }
 
-    const parentIds = student.parentIds ? JSON.parse(student.parentIds) : [];
+    const parentIds = parseJsonArray(student.parentIds);
     if (!parentIds.includes(parentId)) {
       parentIds.push(parentId);
     }
@@ -256,7 +347,7 @@ router.post('/:studentId/add-parent', auth, authorize(['admin']), async (req, re
     const updatedStudent = await prisma.student.update({
       where: { id: req.params.studentId },
       data: {
-        parentIds: JSON.stringify(parentIds),
+        parentIds,
       },
       include: {
         class: true,
@@ -266,12 +357,7 @@ router.post('/:studentId/add-parent', auth, authorize(['admin']), async (req, re
 
     res.json({
       message: 'Parent linked to student',
-      student: {
-        ...updatedStudent,
-        parentIds: JSON.parse(updatedStudent.parentIds),
-        allergies: updatedStudent.allergies ? JSON.parse(updatedStudent.allergies) : [],
-        authorizedPickup: updatedStudent.authorizedPickup ? JSON.parse(updatedStudent.authorizedPickup) : [],
-      },
+      student: formatStudent(updatedStudent),
     });
   } catch (err) {
     console.error('Add parent error:', err);

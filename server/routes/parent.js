@@ -77,14 +77,38 @@ router.get('/child/:studentId/attendance', auth, authorize(['parent']), async (r
   }
 });
 
-// Get Incident Reports
+// Get Incident Reports (Prisma)
 router.get('/child/:studentId/incidents', auth, authorize(['parent']), async (req, res) => {
   try {
-    const incidents = await IncidentReport.find({ studentId: req.params.studentId })
-      .sort({ incidentTime: -1 })
-      .populate('teacherId', 'firstName lastName');
-    
-    res.json(incidents);
+    const incidents = await prisma.incidentReport.findMany({
+      where: { studentId: req.params.studentId },
+      orderBy: { incidentTime: 'desc' },
+    });
+    // enrich with teacher name
+    const teacherIds = [...new Set(incidents.map((i) => i.teacherId).filter(Boolean))];
+    const teachers = teacherIds.length
+      ? await prisma.user.findMany({ where: { id: { in: teacherIds } }, select: { id: true, firstName: true, lastName: true } })
+      : [];
+    const tMap = Object.fromEntries(teachers.map((t) => [t.id, `${t.firstName} ${t.lastName}`]));
+    res.json(incidents.map((i) => ({ ...i, teacherName: tMap[i.teacherId] || 'Teacher' })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get Milestones for child (Prisma)
+router.get('/child/:studentId/milestones', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const milestones = await prisma.milestone.findMany({
+      where: { studentId: req.params.studentId },
+      orderBy: [{ isAchieved: 'asc' }, { createdAt: 'desc' }],
+    });
+    const teacherIds = [...new Set(milestones.map((m) => m.teacherId).filter(Boolean))];
+    const teachers = teacherIds.length
+      ? await prisma.user.findMany({ where: { id: { in: teacherIds } }, select: { id: true, firstName: true, lastName: true } })
+      : [];
+    const tMap = Object.fromEntries(teachers.map((t) => [t.id, `${t.firstName} ${t.lastName}`]));
+    res.json(milestones.map((m) => ({ ...m, teacherName: tMap[m.teacherId] || 'Teacher' })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

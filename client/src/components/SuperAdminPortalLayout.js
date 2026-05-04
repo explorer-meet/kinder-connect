@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import { FaBars, FaTimes, FaSignOutAlt, FaSchool, FaInbox } from 'react-icons/fa';
@@ -17,6 +17,24 @@ export default function SuperAdminPortalLayout({ title, activeSection, onSection
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const sidebarItemRefs = useRef({});
+
+  const navRef = useRef(null);
+
+  useEffect(() => {
+    const nav = navRef.current;
+    const activeItem = sidebarItemRefs.current[activeSection];
+    if (!nav || !activeItem) return;
+    const itemTop = activeItem.offsetTop;
+    const itemBottom = itemTop + activeItem.offsetHeight;
+    const navTop = nav.scrollTop;
+    const navBottom = navTop + nav.clientHeight;
+    if (itemTop < navTop) {
+      nav.scrollTop = itemTop - 8;
+    } else if (itemBottom > navBottom) {
+      nav.scrollTop = itemBottom - nav.clientHeight + 8;
+    }
+  }, [activeSection]);
 
   const handleLogout = () => {
     logout();
@@ -61,7 +79,7 @@ export default function SuperAdminPortalLayout({ title, activeSection, onSection
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4 px-3">
+        <nav ref={navRef} className="flex-1 overflow-y-auto py-4 px-3">
           {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
             const active = activeSection === id;
             const count = badges[id] || 0;
@@ -69,6 +87,9 @@ export default function SuperAdminPortalLayout({ title, activeSection, onSection
             return (
               <button
                 key={id}
+                ref={(element) => {
+                  if (element) sidebarItemRefs.current[id] = element;
+                }}
                 onClick={() => {
                   onSectionChange(id);
                   setSidebarOpen(false);

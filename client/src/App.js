@@ -21,6 +21,7 @@ import ActivityLogger from './pages/teacher/ActivityLogger';
 import AttendanceMarker from './pages/teacher/AttendanceMarker';
 import MilestoneTracker from './pages/teacher/MilestoneTracker';
 import IncidentReporter from './pages/teacher/IncidentReporter';
+import MedicalRecords from './pages/teacher/MedicalRecords';
 import ReportBuilder from './pages/teacher/ReportBuilder';
 import TeacherChat from './pages/teacher/Chat';
 import PTMManagement from './pages/teacher/PTMManagement';
@@ -33,6 +34,8 @@ import DevelopmentReport from './pages/parent/DevelopmentReport';
 import AttendanceView from './pages/parent/AttendanceView';
 import ParentChat from './pages/parent/Chat';
 import PTMBooking from './pages/parent/PTMBooking';
+import MilestoneView from './pages/parent/MilestoneView';
+import IncidentView from './pages/parent/IncidentView';
 
 // Components
 import ProtectedRoute from './components/ProtectedRoute';
@@ -111,6 +114,9 @@ function App() {
         <Route path="/teacher/incident" element={
           <ProtectedRoute requiredRole="teacher"><IncidentReporter /></ProtectedRoute>
         } />
+        <Route path="/teacher/medical" element={
+          <ProtectedRoute requiredRole="teacher"><MedicalRecords /></ProtectedRoute>
+        } />
         <Route path="/teacher/reports" element={
           <ProtectedRoute requiredRole="teacher"><ReportBuilder /></ProtectedRoute>
         } />
@@ -142,6 +148,12 @@ function App() {
         } />
         <Route path="/parent/ptm" element={
           <ProtectedRoute requiredRole="parent"><PTMBooking /></ProtectedRoute>
+        } />
+        <Route path="/parent/milestones/:studentId" element={
+          <ProtectedRoute requiredRole="parent"><MilestoneView /></ProtectedRoute>
+        } />
+        <Route path="/parent/incidents/:studentId" element={
+          <ProtectedRoute requiredRole="parent"><IncidentView /></ProtectedRoute>
         } />
 
         <Route path="*" element={<Navigate to={user ? getDashboardPath(user.role) : '/'} />} />

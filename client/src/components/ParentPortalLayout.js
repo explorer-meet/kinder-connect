@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import {
@@ -76,6 +76,8 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const navRef = useRef(null);
+  const sidebarItemRefs = useRef({});
   const theme = ACCENTS[accent] || ACCENTS.blue;
 
   const handleLogout = () => {
@@ -84,6 +86,27 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
   };
 
   const currentDashboardSection = location.pathname === '/parent/dashboard' ? location.state?.section || 'home' : null;
+  const activeSidebarLabel = NAV_ITEMS.find((item) => {
+    if (item.match.some((prefix) => location.pathname.startsWith(prefix))) {
+      return true;
+    }
+    return location.pathname === '/parent/dashboard' && item.matchSection === currentDashboardSection;
+  })?.label;
+
+  useEffect(() => {
+    const nav = navRef.current;
+    const activeItem = sidebarItemRefs.current[activeSidebarLabel];
+    if (!nav || !activeItem) return;
+    const itemTop = activeItem.offsetTop;
+    const itemBottom = itemTop + activeItem.offsetHeight;
+    const navTop = nav.scrollTop;
+    const navBottom = navTop + nav.clientHeight;
+    if (itemTop < navTop) {
+      nav.scrollTop = itemTop - 8;
+    } else if (itemBottom > navBottom) {
+      nav.scrollTop = itemBottom - nav.clientHeight + 8;
+    }
+  }, [activeSidebarLabel]);
 
   const isActive = (item) => {
     if (item.match.some((prefix) => location.pathname.startsWith(prefix))) {
@@ -128,13 +151,16 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
           </div>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-4">
+        <nav ref={navRef} className="flex-1 overflow-y-auto px-3 py-4">
           {NAV_ITEMS.map(({ label, to, state, icon: Icon, match, matchSection }) => {
             const active = isActive({ match, matchSection });
             const iconTheme = ICON_STYLES[label] || { tone: 'text-slate-500', soft: 'bg-slate-100' };
             return (
               <Link
                 key={`${label}-${to}`}
+                ref={(element) => {
+                  if (element) sidebarItemRefs.current[label] = element;
+                }}
                 to={to}
                 state={state}
                 onClick={() => setSidebarOpen(false)}

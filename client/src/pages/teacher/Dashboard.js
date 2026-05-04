@@ -6,7 +6,7 @@ import {
   FaHome, FaClipboardList, FaUsers, FaBullhorn, FaCalendarAlt,
   FaExclamationTriangle, FaChartBar, FaTimes, FaSignOutAlt,
   FaChevronRight, FaCamera, FaGraduationCap, FaPlus, FaPaperPlane,
-  FaLightbulb, FaCheckCircle, FaUser, FaSave, FaKey, FaUpload,
+  FaLightbulb, FaCheckCircle, FaUser, FaSave, FaKey, FaUpload, FaStethoscope,
 } from 'react-icons/fa';
 
 const NAV = [
@@ -21,6 +21,7 @@ const PAGE_LINKS = [
   { label: 'Log Activities',   icon: FaCamera,              path: '/teacher/activity',   color: 'from-violet-400 to-violet-600' },
   { label: 'Track Milestones', icon: FaGraduationCap,       path: '/teacher/milestones', color: 'from-emerald-400 to-emerald-600' },
   { label: 'Incident Report',  icon: FaExclamationTriangle, path: '/teacher/incident',   color: 'from-rose-400 to-rose-600' },
+  { label: 'Medical Records',  icon: FaStethoscope,         path: '/teacher/medical',    color: 'from-pink-400 to-rose-500' },
   { label: 'PTM Management',   icon: FaCalendarAlt,         path: '/teacher/ptm',        color: 'from-amber-400 to-orange-500' },
   { label: 'Reports',          icon: FaChartBar,            path: '/teacher/reports',    color: 'from-indigo-400 to-indigo-600' },
 ];
@@ -30,6 +31,7 @@ const NAV_PAGE_ITEMS = [
   { id: 'activity',   label: 'Log Activities',   icon: FaCamera,              path: '/teacher/activity' },
   { id: 'milestones', label: 'Track Milestones', icon: FaGraduationCap,       path: '/teacher/milestones' },
   { id: 'incident',   label: 'Incident Report',  icon: FaExclamationTriangle, path: '/teacher/incident' },
+  { id: 'medical',    label: 'Medical Records',  icon: FaStethoscope,         path: '/teacher/medical' },
   { id: 'ptm',        label: 'PTM Management',   icon: FaCalendarAlt,         path: '/teacher/ptm' },
   { id: 'reports',    label: 'Reports',          icon: FaChartBar,            path: '/teacher/reports' },
 ];
@@ -43,6 +45,7 @@ const NAV_ICON_STYLES = {
   activity: { tone: 'text-sky-500', soft: 'bg-sky-50' },
   milestones: { tone: 'text-emerald-500', soft: 'bg-emerald-50' },
   incident: { tone: 'text-rose-500', soft: 'bg-rose-50' },
+  medical: { tone: 'text-pink-500', soft: 'bg-pink-50' },
   ptm: { tone: 'text-orange-500', soft: 'bg-orange-50' },
   reports: { tone: 'text-indigo-500', soft: 'bg-indigo-50' },
 };

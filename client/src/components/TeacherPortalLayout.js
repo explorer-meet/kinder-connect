@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
 import {
   FaTimes, FaSignOutAlt, FaChevronRight,
   FaHome, FaLightbulb, FaBullhorn, FaClipboardList, FaCamera,
-  FaGraduationCap, FaExclamationTriangle, FaCalendarAlt, FaChartBar, FaUser,
+  FaGraduationCap, FaExclamationTriangle, FaCalendarAlt, FaChartBar, FaUser, FaStethoscope,
 } from 'react-icons/fa';
 
 const NAV_INLINE = [
@@ -19,6 +19,7 @@ const NAV_TOOLS = [
   { id: 'activity',   label: 'Log Activities',   icon: FaCamera,              path: '/teacher/activity' },
   { id: 'milestones', label: 'Track Milestones', icon: FaGraduationCap,       path: '/teacher/milestones' },
   { id: 'incident',   label: 'Incident Report',  icon: FaExclamationTriangle, path: '/teacher/incident' },
+  { id: 'medical',    label: 'Medical Records',  icon: FaStethoscope,         path: '/teacher/medical' },
   { id: 'ptm',        label: 'PTM Management',   icon: FaCalendarAlt,         path: '/teacher/ptm' },
   { id: 'reports',    label: 'Reports',          icon: FaChartBar,            path: '/teacher/reports' },
 ];
@@ -32,6 +33,7 @@ const ICON_STYLES = {
   activity: { tone: 'text-sky-500', soft: 'bg-sky-50' },
   milestones: { tone: 'text-emerald-500', soft: 'bg-emerald-50' },
   incident: { tone: 'text-rose-500', soft: 'bg-rose-50' },
+  medical: { tone: 'text-pink-500', soft: 'bg-pink-50' },
   ptm: { tone: 'text-orange-500', soft: 'bg-orange-50' },
   reports: { tone: 'text-indigo-500', soft: 'bg-indigo-50' },
 };
@@ -41,6 +43,8 @@ export default function TeacherPortalLayout({ title, children }) {
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const navRef = useRef(null);
+  const sidebarItemRefs = useRef({});
 
   const handleLogout = () => {
     logout();
@@ -48,6 +52,25 @@ export default function TeacherPortalLayout({ title, children }) {
   };
 
   const currentPath = location.pathname;
+  const requestedSection = location.state?.section;
+  const activeSidebarId = currentPath === '/teacher/dashboard'
+    ? (requestedSection || 'home')
+    : NAV_TOOLS.find((item) => currentPath === item.path || currentPath.startsWith(`${item.path}/`))?.id;
+
+  useEffect(() => {
+    const nav = navRef.current;
+    const activeItem = sidebarItemRefs.current[activeSidebarId];
+    if (!nav || !activeItem) return;
+    const itemTop = activeItem.offsetTop;
+    const itemBottom = itemTop + activeItem.offsetHeight;
+    const navTop = nav.scrollTop;
+    const navBottom = navTop + nav.clientHeight;
+    if (itemTop < navTop) {
+      nav.scrollTop = itemTop - 8;
+    } else if (itemBottom > navBottom) {
+      nav.scrollTop = itemBottom - nav.clientHeight + 8;
+    }
+  }, [activeSidebarId]);
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
@@ -91,10 +114,9 @@ export default function TeacherPortalLayout({ title, children }) {
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 overflow-y-auto py-4 px-3">
+        <nav ref={navRef} className="flex-1 overflow-y-auto py-4 px-3">
           {NAV_INLINE.map(({ id, label, icon: Icon, path, state }) => {
             const isDashboard = currentPath === '/teacher/dashboard';
-            const requestedSection = location.state?.section;
             const active = state?.section
               ? isDashboard && requestedSection === state.section
               : isDashboard && !requestedSection && id === 'home';
@@ -102,6 +124,9 @@ export default function TeacherPortalLayout({ title, children }) {
             return (
               <button
                 key={id}
+                ref={(element) => {
+                  if (element) sidebarItemRefs.current[id] = element;
+                }}
                 onClick={() => { navigate(path, state ? { state } : undefined); setSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium transition-all ${
                   active
@@ -126,6 +151,9 @@ export default function TeacherPortalLayout({ title, children }) {
             return (
               <button
                 key={id}
+                ref={(element) => {
+                  if (element) sidebarItemRefs.current[id] = element;
+                }}
                 onClick={() => { navigate(path); setSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium transition-all ${
                   active
