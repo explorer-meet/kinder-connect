@@ -167,6 +167,9 @@ export default function ParentDashboard() {
   const [incFilter, setIncFilter] = useState('');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const photoInputRef = useRef(null);
+  const childPhotoInputRef = useRef(null);
+  const [photoUploadChildId, setPhotoUploadChildId] = useState('');
+  const [uploadingChildPhotoId, setUploadingChildPhotoId] = useState('');
 
   const [ptmSlots, setPtmSlots] = useState([]);
   const [ptmRequests, setPtmRequests] = useState([]);
@@ -372,6 +375,69 @@ export default function ParentDashboard() {
     }
   };
 
+  const updateChildFromServer = useCallback((updated) => {
+    if (!updated?.id) return;
+    setChildren((prev) => prev.map((child) => (child.id === updated.id ? { ...child, ...updated } : child)));
+    setProfileStudent((prev) => (prev?.id === updated.id ? { ...prev, ...updated } : prev));
+  }, []);
+
+  const startChildPhotoUpload = (childId) => {
+    setPhotoUploadChildId(childId);
+    childPhotoInputRef.current?.click();
+  };
+
+  const handleChildPhotoUpload = async (e) => {
+    const file = e.target.files[0];
+    const childId = photoUploadChildId;
+    if (!file || !childId) return;
+
+    setUploadingChildPhotoId(childId);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('name', file.name);
+
+      const uploadRes = await api.post('/upload/photo', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const photo = uploadRes.data?.url;
+      if (!photo) throw new Error('Upload failed');
+
+      const saveRes = await api.put(`/students/parent/child/${childId}/photo`, { photo });
+      updateChildFromServer(saveRes.data?.student || { id: childId, photo });
+      showToast('success', 'Child photo updated');
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Child photo upload failed');
+    } finally {
+      setUploadingChildPhotoId('');
+      setPhotoUploadChildId('');
+      e.target.value = '';
+    }
+  };
+
+  const getChildInitials = (child) => {
+    const first = child?.firstName?.[0] || '';
+    const last = child?.lastName?.[0] || '';
+    const initials = `${first}${last}`.toUpperCase();
+    return initials || '?';
+  };
+
+  const ChildAvatar = ({ child, i = 0, size = 'sm' }) => {
+    const sizeClass = size === 'lg' ? 'w-16 h-16 text-xl' : 'w-6 h-6 text-xs';
+    if (child?.photo) {
+      return (
+        <img
+          src={child.photo}
+          alt={`${child.firstName || 'Child'} avatar`}
+          className={`${sizeClass} rounded-full object-cover border border-white/70 shadow-sm`}
+        />
+      );
+    }
+    return (
+      <div className={`${sizeClass} rounded-full bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white font-bold`}>
+        {getChildInitials(child)}
+      </div>
+    );
+  };
+
   const handlePickupSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -509,9 +575,7 @@ export default function ParentDashboard() {
               onClick={() => setSelectedId(child.id)}
               className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border transition ${selectedId === child.id ? activeClass : inactiveClass}`}
             >
-              <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white text-xs font-bold`}>
-                {child.firstName[0]}
-              </div>
+              <ChildAvatar child={child} i={i} />
               {child.firstName} {child.lastName}
             </button>
           ))}
@@ -697,14 +761,21 @@ export default function ParentDashboard() {
               <div className={`h-2 bg-gradient-to-r ${AVATAR_COLORS[i % AVATAR_COLORS.length]}`} />
               <div className="p-5 space-y-4 bg-gradient-to-br from-white via-sky-50/60 to-violet-50/60">
                 <div className="flex items-center gap-4">
-                  <div className={`w-16 h-16 rounded-2xl bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white text-2xl font-bold shadow-md`}>
-                    {child.firstName[0]}{child.lastName[0]}
-                  </div>
+                  <ChildAvatar child={child} i={i} size="lg" />
                   <div className="min-w-0">
                     <p className="text-lg font-bold text-gray-900 truncate">{child.firstName} {child.lastName}</p>
                     <p className="text-sm text-gray-600">{child.class?.name}{child.class?.section ? ` — Section ${child.class.section}` : ''}</p>
                     <p className="text-xs text-gray-500 truncate">{child.school?.name}</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => startChildPhotoUpload(child.id)}
+                    disabled={uploadingChildPhotoId === child.id}
+                    className="ml-auto rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold px-3 py-2 flex items-center gap-1.5 disabled:opacity-70"
+                  >
+                    {uploadingChildPhotoId === child.id ? <span className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-slate-500" /> : <FaUpload />}
+                    {child.photo ? 'Change Photo' : 'Upload Photo'}
+                  </button>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 text-center">
@@ -1719,9 +1790,7 @@ export default function ParentDashboard() {
                   onClick={() => { setMsChildId(child.id); setMsFilter(''); loadMilestones(child.id); }}
                   className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border transition ${msChildId === child.id ? 'bg-emerald-600 text-white border-emerald-600 shadow' : 'bg-white text-slate-700 border-slate-200 hover:bg-emerald-50'}`}
                 >
-                  <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white text-xs font-bold`}>
-                    {child.firstName[0]}
-                  </div>
+                  <ChildAvatar child={child} i={i} />
                   {child.firstName} {child.lastName}
                 </button>
               ))}
@@ -1836,9 +1905,7 @@ export default function ParentDashboard() {
                   onClick={() => { setIncChildId(child.id); setIncFilter(''); loadIncidents(child.id); }}
                   className={`flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold border transition ${incChildId === child.id ? 'bg-rose-600 text-white border-rose-600 shadow' : 'bg-white text-slate-700 border-slate-200 hover:bg-rose-50'}`}
                 >
-                  <div className={`w-6 h-6 rounded-lg bg-gradient-to-br ${AVATAR_COLORS[i % AVATAR_COLORS.length]} flex items-center justify-center text-white text-xs font-bold`}>
-                    {child.firstName[0]}
-                  </div>
+                  <ChildAvatar child={child} i={i} />
                   {child.firstName} {child.lastName}
                 </button>
               ))}
@@ -1948,6 +2015,7 @@ export default function ParentDashboard() {
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
+      <input ref={childPhotoInputRef} type="file" accept="image/*" className="hidden" onChange={handleChildPhotoUpload} />
       {/* Sidebar overlay (mobile) */}
       {sidebarOpen && <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 

@@ -74,6 +74,25 @@ router.put('/parent/child/:studentId/medical-profile', auth, authorize(['parent'
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+router.put('/parent/child/:studentId/photo', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const { photo } = req.body;
+    if (!photo || typeof photo !== 'string') {
+      return res.status(400).json({ error: 'photo URL is required' });
+    }
+
+    const student = await queryOne('SELECT id, parentIds FROM student WHERE id = ? LIMIT 1', [req.params.studentId]);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const parentIds = parseJ(student.parentIds) || [];
+    if (!parentIds.includes(req.userId)) return res.status(403).json({ error: 'Not authorized' });
+
+    await query('UPDATE student SET photo = ?, updatedAt = NOW() WHERE id = ?', [photo, req.params.studentId]);
+    const updated = await queryOne('SELECT * FROM student WHERE id = ?', [req.params.studentId]);
+    res.json({ message: 'Child photo updated successfully', student: fmt(updated) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 router.get('/school/:schoolId', auth, authorize(['admin']), async (req, res) => {
   try {
     const students = await query('SELECT * FROM student WHERE schoolId = ?', [req.params.schoolId]);

@@ -19,9 +19,9 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 const connectDB = async () => {
   try {
     await pool.execute('SELECT 1');
-    console.log('âœ… MySQL Connected');
+    console.log('MySQL Connected');
   } catch (err) {
-    console.error('âŒ MySQL Connection Failed:', err.message);
+    console.error('MySQL Connection Failed:', err.message);
     process.exit(1);
   }
 };
@@ -88,17 +88,17 @@ const startServer = async () => {
   const PORT = process.env.PORT || 5000;
 
   server = app.listen(PORT, () => {
-    console.log(`ðŸš€ Server running on port ${PORT}`);
+    console.log(`Server running on port ${PORT}`);
   });
 
   server.on('error', async (err) => {
     if (err.code === 'EADDRINUSE') {
-      console.error(`âŒ Port ${PORT} is already in use. Stop the other server process or change PORT.`);
+      console.error(`Port ${PORT} is already in use. Stop the other server process or change PORT.`);
       await shutdown(null, 1);
       return;
     }
 
-    console.error('âŒ Server startup failed:', err.message);
+    console.error('Server startup failed:', err.message);
     await shutdown(null, 1);
   });
 };
