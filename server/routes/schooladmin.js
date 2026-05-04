@@ -1,21 +1,19 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const { auth, authorize } = require('../middleware/auth');
-const prisma = require('../src/lib/prisma');
+const { pool, query, queryOne, newId, parseJ, toJ } = require('../src/lib/db');
 const { sendMailSafe } = require('../src/lib/mailer');
 
 const router = express.Router();
 
-const getCurrentSchoolUser = async (userId) => prisma.user.findUnique({
-  where: { id: userId },
-  select: { id: true, schoolId: true, role: true },
-});
+const getCurrentSchoolUser = async (userId) =>
+  queryOne('SELECT id, schoolId, role FROM `User` WHERE id = ? LIMIT 1', [userId]);
 
 const upsertParentByEmail = async ({ email, firstName, lastName, phone, schoolId, fallbackFirstName, fallbackLastName }) => {
   const normalizedEmail = email ? String(email).trim().toLowerCase() : '';
   if (!normalizedEmail) return { parentUser: null, accountInfo: null };
 
-  let parentUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+  let parentUser = await queryOne('SELECT * FROM `User` WHERE email = ? LIMIT 1', [normalizedEmail]);
   if (parentUser && parentUser.role !== 'parent') {
     throw new Error(`Provided parent email (${normalizedEmail}) belongs to a non-parent account`);
   }
@@ -23,33 +21,16 @@ const upsertParentByEmail = async ({ email, firstName, lastName, phone, schoolId
   if (!parentUser) {
     const defaultParentPassword = process.env.DEFAULT_PARENT_PASSWORD || 'Parent@123';
     const hashedPassword = await bcrypt.hash(defaultParentPassword, 10);
-    parentUser = await prisma.user.create({
-      data: {
-        firstName: firstName || fallbackFirstName || 'Parent',
-        lastName: lastName || fallbackLastName || 'User',
-        email: normalizedEmail,
-        phone: phone || '',
-        password: hashedPassword,
-        role: 'parent',
-        schoolId: schoolId || null,
-        isActive: true,
-      },
-    });
-
-    return {
-      parentUser,
-      accountInfo: {
-        email: normalizedEmail,
-        password: defaultParentPassword,
-        isNewAccount: true,
-      },
-    };
+    const id = newId();
+    await query(
+      "INSERT INTO `User` (id, firstName, lastName, email, phone, password, role, schoolId, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, 'parent', ?, 1, NOW(), NOW())",
+      [id, firstName || fallbackFirstName || 'Parent', lastName || fallbackLastName || 'User', normalizedEmail, phone || '', hashedPassword, schoolId || null]
+    );
+    parentUser = await queryOne('SELECT * FROM `User` WHERE id = ? LIMIT 1', [id]);
+    return { parentUser, accountInfo: { email: normalizedEmail, password: defaultParentPassword, isNewAccount: true } };
   }
 
-  return {
-    parentUser,
-    accountInfo: { email: normalizedEmail, isNewAccount: false },
-  };
+  return { parentUser, accountInfo: { email: normalizedEmail, isNewAccount: false } };
 };
 
 router.get('/school', auth, authorize(['school_admin']), async (req, res) => {
@@ -57,21 +38,22 @@ router.get('/school', auth, authorize(['school_admin']), async (req, res) => {
     const user = await getCurrentSchoolUser(req.userId);
     if (!user?.schoolId) return res.status(400).json({ error: 'School admin is not linked to a school' });
 
-    const school = await prisma.school.findUnique({
-      where: { id: user.schoolId },
-      include: {
-        classes: {
-          include: {
-            batches: { orderBy: { createdAt: 'asc' } },
-          },
-          orderBy: [{ name: 'asc' }, { section: 'asc' }],
-        },
-      },
-    });
+    const school = await queryOne('SELECT * FROM School WHERE id = ? LIMIT 1', [user.schoolId]);
+    if (!school) return res.status(404).json({ error: 'School not found' });
+
+    const classes = await query('SELECT * FROM `Class` WHERE schoolId = ? ORDER BY name ASC, section ASC', [user.schoolId]);
+    const batches = classes.length ? await query(
+      `SELECT * FROM Batch WHERE classId IN (${classes.map(() => '?').join(',')}) ORDER BY createdAt ASC`,
+      classes.map(c => c.id)
+    ) : [];
+
+    const batchMap = {};
+    batches.forEach(b => { (batchMap[b.classId] = batchMap[b.classId] || []).push(b); });
+    school.classes = classes.map(c => ({ ...c, batches: batchMap[c.id] || [] }));
 
     res.json(school);
   } catch (err) {
-    console.error('Get school admin school error:', err);
+    console.error('Get school error:', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -83,13 +65,13 @@ router.get('/stats', auth, authorize(['school_admin']), async (req, res) => {
     if (!schoolId) return res.status(400).json({ error: 'School admin is not linked to a school' });
 
     const [totalStaff, totalStudents, totalClasses, totalBatches] = await Promise.all([
-      prisma.user.count({ where: { schoolId, role: 'teacher' } }),
-      prisma.student.count({ where: { schoolId } }),
-      prisma.class.count({ where: { schoolId } }),
-      prisma.batch.count({ where: { schoolId } }),
+      queryOne("SELECT COUNT(*) AS cnt FROM `User` WHERE schoolId = ? AND role = 'teacher'", [schoolId]),
+      queryOne('SELECT COUNT(*) AS cnt FROM Student WHERE schoolId = ?', [schoolId]),
+      queryOne('SELECT COUNT(*) AS cnt FROM `Class` WHERE schoolId = ?', [schoolId]),
+      queryOne('SELECT COUNT(*) AS cnt FROM Batch WHERE schoolId = ?', [schoolId]),
     ]);
 
-    res.json({ totalStaff, totalStudents, totalClasses, totalBatches });
+    res.json({ totalStaff: totalStaff.cnt, totalStudents: totalStudents.cnt, totalClasses: totalClasses.cnt, totalBatches: totalBatches.cnt });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -98,17 +80,11 @@ router.get('/stats', auth, authorize(['school_admin']), async (req, res) => {
 router.get('/staff', auth, authorize(['school_admin']), async (req, res) => {
   try {
     const user = await getCurrentSchoolUser(req.userId);
-    const staff = await prisma.user.findMany({
-      where: { schoolId: user.schoolId, role: 'teacher' },
-      select: {
-        id: true, firstName: true, lastName: true, email: true, phone: true, role: true,
-        photo: true, isActive: true, address: true, qualification: true,
-        dateOfJoining: true, emergencyContactName: true, emergencyContactPhone: true,
-        staffDocuments: true,
-      },
-      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-    });
-    res.json(staff);
+    const staff = await query(
+      "SELECT id, firstName, lastName, email, phone, role, photo, isActive, address, qualification, dateOfJoining, emergencyContactName, emergencyContactPhone, staffDocuments FROM `User` WHERE schoolId = ? AND role = 'teacher' ORDER BY firstName ASC, lastName ASC",
+      [user.schoolId]
+    );
+    res.json(staff.map(s => ({ ...s, staffDocuments: parseJ(s.staffDocuments) || [] })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -119,34 +95,18 @@ router.post('/staff', auth, authorize(['school_admin']), async (req, res) => {
     const { firstName, lastName, email, phone, role, password, photo,
       address, qualification, dateOfJoining, emergencyContactName, emergencyContactPhone, staffDocuments } = req.body;
     const currentUser = await getCurrentSchoolUser(req.userId);
+    if (!firstName || !lastName || !email || !role) return res.status(400).json({ error: 'All fields are required' });
 
-    if (!firstName || !lastName || !email || !role) {
-      return res.status(400).json({ error: 'All fields are required' });
-    }
-
-    const existingUser = await prisma.user.findUnique({ where: { email } });
+    const existingUser = await queryOne('SELECT id FROM `User` WHERE email = ? LIMIT 1', [email]);
     if (existingUser) return res.status(400).json({ error: 'Email already in use' });
 
     const hashedPassword = await bcrypt.hash(password || 'temp123', 10);
-    const staff = await prisma.user.create({
-      data: {
-        firstName,
-        lastName,
-        email,
-        phone: phone || '',
-        photo: photo || null,
-        address: address || null,
-        qualification: qualification || null,
-        dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : null,
-        emergencyContactName: emergencyContactName || null,
-        emergencyContactPhone: emergencyContactPhone || null,
-        staffDocuments: staffDocuments || [],
-        password: hashedPassword,
-        role,
-        schoolId: currentUser?.schoolId || null,
-        isActive: true,
-      },
-    });
+    const id = newId();
+    await query(
+      'INSERT INTO `User` (id, firstName, lastName, email, phone, photo, address, qualification, dateOfJoining, emergencyContactName, emergencyContactPhone, staffDocuments, password, role, schoolId, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
+      [id, firstName, lastName, email, phone || '', photo || null, address || null, qualification || null, dateOfJoining ? new Date(dateOfJoining) : null, emergencyContactName || null, emergencyContactPhone || null, toJ(staffDocuments || []), hashedPassword, role, currentUser?.schoolId || null]
+    );
+    const staff = await queryOne('SELECT * FROM `User` WHERE id = ?', [id]);
 
     await sendMailSafe({
       to: staff.email,
@@ -165,23 +125,25 @@ router.put('/staff/:staffId', auth, authorize(['school_admin']), async (req, res
   try {
     const { firstName, lastName, phone, role, photo, isActive,
       address, qualification, dateOfJoining, emergencyContactName, emergencyContactPhone, staffDocuments } = req.body;
-    const staff = await prisma.user.update({
-      where: { id: req.params.staffId },
-      data: {
-        firstName: firstName || undefined,
-        lastName: lastName || undefined,
-        phone: phone !== undefined ? phone : undefined,
-        role: role || undefined,
-        photo: photo !== undefined ? photo : undefined,
-        isActive: isActive !== undefined ? isActive : undefined,
-        address: address !== undefined ? address : undefined,
-        qualification: qualification !== undefined ? qualification : undefined,
-        dateOfJoining: dateOfJoining !== undefined ? (dateOfJoining ? new Date(dateOfJoining) : null) : undefined,
-        emergencyContactName: emergencyContactName !== undefined ? emergencyContactName : undefined,
-        emergencyContactPhone: emergencyContactPhone !== undefined ? emergencyContactPhone : undefined,
-        staffDocuments: staffDocuments !== undefined ? staffDocuments : undefined,
-      },
-    });
+
+    const sets = [], vals = [];
+    if (firstName !== undefined)              { sets.push('firstName = ?');              vals.push(firstName); }
+    if (lastName !== undefined)               { sets.push('lastName = ?');               vals.push(lastName); }
+    if (phone !== undefined)                  { sets.push('phone = ?');                  vals.push(phone); }
+    if (role !== undefined)                   { sets.push('role = ?');                   vals.push(role); }
+    if (photo !== undefined)                  { sets.push('photo = ?');                  vals.push(photo); }
+    if (isActive !== undefined)               { sets.push('isActive = ?');               vals.push(isActive ? 1 : 0); }
+    if (address !== undefined)                { sets.push('address = ?');                vals.push(address); }
+    if (qualification !== undefined)          { sets.push('qualification = ?');          vals.push(qualification); }
+    if (dateOfJoining !== undefined)          { sets.push('dateOfJoining = ?');          vals.push(dateOfJoining ? new Date(dateOfJoining) : null); }
+    if (emergencyContactName !== undefined)   { sets.push('emergencyContactName = ?');   vals.push(emergencyContactName); }
+    if (emergencyContactPhone !== undefined)  { sets.push('emergencyContactPhone = ?');  vals.push(emergencyContactPhone); }
+    if (staffDocuments !== undefined)         { sets.push('staffDocuments = ?');         vals.push(JSON.stringify(staffDocuments)); }
+    sets.push('updatedAt = NOW()');
+    vals.push(req.params.staffId);
+
+    await query(`UPDATE \`User\` SET ${sets.join(', ')} WHERE id = ?`, vals);
+    const staff = await queryOne('SELECT * FROM `User` WHERE id = ?', [req.params.staffId]);
     res.json({ message: 'Staff updated', staff });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -190,7 +152,9 @@ router.put('/staff/:staffId', auth, authorize(['school_admin']), async (req, res
 
 router.delete('/staff/:staffId', auth, authorize(['school_admin']), async (req, res) => {
   try {
-    const staff = await prisma.user.delete({ where: { id: req.params.staffId } });
+    const staff = await queryOne('SELECT id, firstName, lastName FROM `User` WHERE id = ? LIMIT 1', [req.params.staffId]);
+    if (!staff) return res.status(404).json({ error: 'Staff not found' });
+    await query('DELETE FROM `User` WHERE id = ?', [req.params.staffId]);
     res.json({ message: 'Staff removed successfully', staff });
   } catch (err) {
     console.error('Remove staff error:', err);
@@ -203,23 +167,30 @@ router.get('/classes', auth, authorize(['school_admin', 'teacher']), async (req,
     const user = await getCurrentSchoolUser(req.userId);
     if (!user?.schoolId) return res.status(400).json({ error: 'User is not linked to a school' });
 
-    const classes = await prisma.class.findMany({
-      where: { schoolId: user.schoolId },
-      include: {
-        batches: {
-          include: {
-            students: {
-              select: { id: true, firstName: true, lastName: true, enrollmentNumber: true, isActive: true },
-              orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-            },
-          },
-          orderBy: { createdAt: 'asc' },
-        },
-      },
-      orderBy: [{ name: 'asc' }, { section: 'asc' }],
-    });
+    const classes = await query('SELECT * FROM `Class` WHERE schoolId = ? ORDER BY name ASC, section ASC', [user.schoolId]);
+    if (!classes.length) return res.json([]);
 
-    res.json(classes);
+    const batches = await query(
+      `SELECT * FROM Batch WHERE classId IN (${classes.map(() => '?').join(',')}) ORDER BY createdAt ASC`,
+      classes.map(c => c.id)
+    );
+
+    const batchMap = {};
+    batches.forEach(b => { (batchMap[b.classId] = batchMap[b.classId] || []).push(b); });
+
+    const batchIds = batches.map(b => b.id);
+    const students = batchIds.length ? await query(
+      `SELECT id, firstName, lastName, enrollmentNumber, isActive, batchId FROM Student WHERE batchId IN (${batchIds.map(() => '?').join(',')}) ORDER BY firstName ASC, lastName ASC`,
+      batchIds
+    ) : [];
+
+    const studentMap = {};
+    students.forEach(s => { (studentMap[s.batchId] = studentMap[s.batchId] || []).push(s); });
+
+    res.json(classes.map(c => ({
+      ...c,
+      batches: (batchMap[c.id] || []).map(b => ({ ...b, students: studentMap[b.id] || [] })),
+    })));
   } catch (err) {
     console.error('Get classes error:', err);
     res.status(500).json({ error: err.message });
@@ -230,23 +201,16 @@ router.post('/class', auth, authorize(['school_admin']), async (req, res) => {
   try {
     const { name, section, capacity } = req.body;
     const user = await getCurrentSchoolUser(req.userId);
-
     if (!user?.schoolId || !name) return res.status(400).json({ error: 'Class name is required' });
 
-    const existingClass = await prisma.class.findFirst({
-      where: { schoolId: user.schoolId, name, section: section || null },
-    });
+    const existingClass = await queryOne('SELECT id FROM `Class` WHERE schoolId = ? AND name = ? AND section = ? LIMIT 1', [user.schoolId, name, section || null]);
     if (existingClass) return res.status(400).json({ error: 'Class already exists in this school' });
 
-    const classObj = await prisma.class.create({
-      data: {
-        schoolId: user.schoolId,
-        name,
-        section: section || '',
-        capacity: capacity ? parseInt(capacity, 10) : null,
-      },
-    });
+    const id = newId();
+    await query('INSERT INTO `Class` (id, schoolId, name, section, capacity, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, NOW(), NOW())',
+      [id, user.schoolId, name, section || '', capacity ? parseInt(capacity, 10) : null]);
 
+    const classObj = await queryOne('SELECT * FROM `Class` WHERE id = ?', [id]);
     res.status(201).json({ message: 'Class created successfully', class: classObj });
   } catch (err) {
     console.error('Create class error:', err);
@@ -258,30 +222,19 @@ router.post('/batch', auth, authorize(['school_admin', 'teacher']), async (req, 
   try {
     const { classId, shiftName, startTime, endTime, capacity } = req.body;
     const user = await getCurrentSchoolUser(req.userId);
+    if (!classId || !shiftName || !user?.schoolId) return res.status(400).json({ error: 'Class and shift name are required' });
 
-    if (!classId || !shiftName || !user?.schoolId) {
-      return res.status(400).json({ error: 'Class and shift name are required' });
-    }
+    const classObj = await queryOne('SELECT id, schoolId FROM `Class` WHERE id = ? LIMIT 1', [classId]);
+    if (!classObj || classObj.schoolId !== user.schoolId) return res.status(404).json({ error: 'Class not found' });
 
-    const classObj = await prisma.class.findUnique({ where: { id: classId } });
-    if (!classObj || classObj.schoolId !== user.schoolId) {
-      return res.status(404).json({ error: 'Class not found' });
-    }
-
-    const existingBatch = await prisma.batch.findFirst({ where: { classId, shiftName } });
+    const existingBatch = await queryOne('SELECT id FROM Batch WHERE classId = ? AND shiftName = ? LIMIT 1', [classId, shiftName]);
     if (existingBatch) return res.status(400).json({ error: 'Batch with this shift already exists for this class' });
 
-    const batch = await prisma.batch.create({
-      data: {
-        schoolId: user.schoolId,
-        classId,
-        shiftName,
-        startTime: startTime || '09:00 AM',
-        endTime: endTime || '12:00 PM',
-        capacity: capacity ? parseInt(capacity, 10) : null,
-      },
-    });
+    const id = newId();
+    await query('INSERT INTO Batch (id, schoolId, classId, shiftName, startTime, endTime, capacity, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
+      [id, user.schoolId, classId, shiftName, startTime || '09:00 AM', endTime || '12:00 PM', capacity ? parseInt(capacity, 10) : null]);
 
+    const batch = await queryOne('SELECT * FROM Batch WHERE id = ?', [id]);
     res.status(201).json({ message: 'Batch created successfully', batch });
   } catch (err) {
     console.error('Create batch error:', err);
@@ -291,9 +244,10 @@ router.post('/batch', auth, authorize(['school_admin', 'teacher']), async (req, 
 
 router.delete('/batch/:batchId', auth, authorize(['school_admin']), async (req, res) => {
   try {
-    const studentCount = await prisma.student.count({ where: { batchId: req.params.batchId } });
-    if (studentCount > 0) return res.status(400).json({ error: 'Cannot delete batch with students. Please delete students first.' });
-    const batch = await prisma.batch.delete({ where: { id: req.params.batchId } });
+    const studentCount = await queryOne('SELECT COUNT(*) AS cnt FROM Student WHERE batchId = ?', [req.params.batchId]);
+    if (studentCount.cnt > 0) return res.status(400).json({ error: 'Cannot delete batch with students. Please delete students first.' });
+    const batch = await queryOne('SELECT * FROM Batch WHERE id = ? LIMIT 1', [req.params.batchId]);
+    await query('DELETE FROM Batch WHERE id = ?', [req.params.batchId]);
     res.json({ message: 'Batch deleted successfully', batch });
   } catch (err) {
     console.error('Delete batch error:', err);
@@ -304,16 +258,24 @@ router.delete('/batch/:batchId', auth, authorize(['school_admin']), async (req, 
 router.get('/students', auth, authorize(['school_admin']), async (req, res) => {
   try {
     const user = await getCurrentSchoolUser(req.userId);
-    const students = await prisma.student.findMany({
-      where: { schoolId: user.schoolId },
-      include: {
-        school: { select: { id: true, name: true } },
-        class: { select: { id: true, name: true, section: true } },
-        batch: { select: { id: true, shiftName: true, startTime: true, endTime: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json(students);
+    const students = await query(
+      `SELECT s.*, sc.id AS schoolRelId, sc.name AS schoolName, c.id AS classRelId, c.name AS className, c.section, b.id AS batchRelId, b.shiftName, b.startTime AS batchStartTime, b.endTime AS batchEndTime
+       FROM Student s
+       LEFT JOIN School sc ON s.schoolId = sc.id
+       LEFT JOIN \`Class\` c ON s.classId = c.id
+       LEFT JOIN Batch b ON s.batchId = b.id
+       WHERE s.schoolId = ? ORDER BY s.createdAt DESC`,
+      [user.schoolId]
+    );
+    res.json(students.map(s => ({
+      ...s,
+      parentIds: parseJ(s.parentIds) || [],
+      allergies: parseJ(s.allergies) || [],
+      documents: parseJ(s.documents) || [],
+      school: s.schoolRelId ? { id: s.schoolRelId, name: s.schoolName } : null,
+      class: s.classRelId ? { id: s.classRelId, name: s.className, section: s.section } : null,
+      batch: s.batchRelId ? { id: s.batchRelId, shiftName: s.shiftName, startTime: s.batchStartTime, endTime: s.batchEndTime } : null,
+    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -328,13 +290,11 @@ router.post('/batch/:batchId/student', auth, authorize(['school_admin']), async 
       motherFirstName, motherLastName,
       guardianFirstName, guardianLastName,
       documents,
-      // Father login account
       parentEmail, parentFirstName, parentLastName, parentPhone,
-      // Mother/guardian login account
       secondParentEmail, secondParentFirstName, secondParentLastName, secondParentPhone,
     } = req.body;
 
-    const batch = await prisma.batch.findUnique({ where: { id: req.params.batchId }, include: { class: true } });
+    const batch = await queryOne('SELECT * FROM Batch WHERE id = ? LIMIT 1', [req.params.batchId]);
     if (!batch) return res.status(404).json({ error: 'Batch not found' });
     if (!firstName || !lastName) return res.status(400).json({ error: 'Student firstName and lastName are required' });
 
@@ -342,57 +302,33 @@ router.post('/batch/:batchId/student', auth, authorize(['school_admin']), async 
     const parentAccounts = [];
 
     const primaryParent = await upsertParentByEmail({
-      email: parentEmail,
-      firstName: parentFirstName || fatherFirstName,
-      lastName: parentLastName || fatherLastName,
-      phone: parentPhone,
-      schoolId: batch.schoolId,
-      fallbackFirstName: 'Parent',
-      fallbackLastName: `${firstName} ${lastName}`,
+      email: parentEmail, firstName: parentFirstName || fatherFirstName, lastName: parentLastName || fatherLastName,
+      phone: parentPhone, schoolId: batch.schoolId, fallbackFirstName: 'Parent', fallbackLastName: `${firstName} ${lastName}`,
     });
     if (primaryParent.parentUser && !linkedParentIds.includes(primaryParent.parentUser.id)) linkedParentIds.push(primaryParent.parentUser.id);
     if (primaryParent.accountInfo) parentAccounts.push(primaryParent.accountInfo);
 
     const secondaryParent = await upsertParentByEmail({
-      email: secondParentEmail,
-      firstName: secondParentFirstName || motherFirstName,
-      lastName: secondParentLastName || motherLastName,
-      phone: secondParentPhone,
-      schoolId: batch.schoolId,
-      fallbackFirstName: 'Guardian',
-      fallbackLastName: `${firstName} ${lastName}`,
+      email: secondParentEmail, firstName: secondParentFirstName || motherFirstName, lastName: secondParentLastName || motherLastName,
+      phone: secondParentPhone, schoolId: batch.schoolId, fallbackFirstName: 'Guardian', fallbackLastName: `${firstName} ${lastName}`,
     });
     if (secondaryParent.parentUser && !linkedParentIds.includes(secondaryParent.parentUser.id)) linkedParentIds.push(secondaryParent.parentUser.id);
     if (secondaryParent.accountInfo) parentAccounts.push(secondaryParent.accountInfo);
 
-    const student = await prisma.student.create({
-      data: {
-        firstName,
-        lastName,
-        dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null,
-        enrollmentNumber: enrollmentNumber || `STU-${Date.now()}`,
-        photo: photo || null,
-        schoolId: batch.schoolId,
-        classId: batch.classId,
-        batchId: req.params.batchId,
-        parentIds: linkedParentIds,
-        fatherFirstName: fatherFirstName || null,
-        fatherLastName: fatherLastName || null,
-        motherFirstName: motherFirstName || null,
-        motherLastName: motherLastName || null,
-        guardianFirstName: guardianFirstName || null,
-        guardianLastName: guardianLastName || null,
-        documents: Array.isArray(documents) ? documents : [],
-      },
-    });
+    const id = newId();
+    await query(
+      'INSERT INTO Student (id, firstName, lastName, dateOfBirth, enrollmentNumber, photo, schoolId, classId, batchId, parentIds, fatherFirstName, fatherLastName, motherFirstName, motherLastName, guardianFirstName, guardianLastName, documents, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
+      [id, firstName, lastName, dateOfBirth ? new Date(dateOfBirth) : null, enrollmentNumber || `STU-${Date.now()}`, photo || null, batch.schoolId, batch.classId, req.params.batchId, JSON.stringify(linkedParentIds), fatherFirstName || null, fatherLastName || null, motherFirstName || null, motherLastName || null, guardianFirstName || null, guardianLastName || null, JSON.stringify(Array.isArray(documents) ? documents : [])]
+    );
+    const student = await queryOne('SELECT * FROM Student WHERE id = ?', [id]);
 
     if (linkedParentIds.length > 0) {
       await Promise.all(linkedParentIds.map(async (parentId) => {
-        const parentUser = await prisma.user.findUnique({ where: { id: parentId } });
+        const parentUser = await queryOne('SELECT id, parentChildIds FROM `User` WHERE id = ? LIMIT 1', [parentId]);
         if (!parentUser) return;
-        const currentChildren = Array.isArray(parentUser.parentChildIds) ? parentUser.parentChildIds : [];
-        if (!currentChildren.includes(student.id)) {
-          await prisma.user.update({ where: { id: parentId }, data: { parentChildIds: [...currentChildren, student.id] } });
+        const currentChildren = parseJ(parentUser.parentChildIds) || [];
+        if (!currentChildren.includes(id)) {
+          await query('UPDATE `User` SET parentChildIds = ?, updatedAt = NOW() WHERE id = ?', [JSON.stringify([...currentChildren, id]), parentId]);
         }
       }));
     }
@@ -418,16 +354,13 @@ router.put('/student/:studentId', auth, authorize(['school_admin']), async (req,
   try {
     const {
       firstName, lastName, dateOfBirth, enrollmentNumber, batchId, isActive,
-      photo,
-      fatherFirstName, fatherLastName,
-      motherFirstName, motherLastName,
-      guardianFirstName, guardianLastName,
-      documents,
+      photo, fatherFirstName, fatherLastName, motherFirstName, motherLastName,
+      guardianFirstName, guardianLastName, documents,
       parentEmail, parentFirstName, parentLastName, parentPhone,
       secondParentEmail, secondParentFirstName, secondParentLastName, secondParentPhone,
     } = req.body;
 
-    const existingStudent = await prisma.student.findUnique({ where: { id: req.params.studentId } });
+    const existingStudent = await queryOne('SELECT * FROM Student WHERE id = ? LIMIT 1', [req.params.studentId]);
     if (!existingStudent) return res.status(404).json({ error: 'Student not found' });
 
     let nextSchoolId = existingStudent.schoolId;
@@ -435,70 +368,60 @@ router.put('/student/:studentId', auth, authorize(['school_admin']), async (req,
     let nextBatchId = existingStudent.batchId;
 
     if (batchId) {
-      const targetBatch = await prisma.batch.findUnique({ where: { id: batchId } });
+      const targetBatch = await queryOne('SELECT * FROM Batch WHERE id = ? LIMIT 1', [batchId]);
       if (!targetBatch) return res.status(404).json({ error: 'Selected batch not found' });
       nextSchoolId = targetBatch.schoolId;
       nextClassId = targetBatch.classId;
       nextBatchId = batchId;
     }
 
-    const linkedParentIds = Array.isArray(existingStudent.parentIds) ? [...existingStudent.parentIds] : [];
+    const linkedParentIds = parseJ(existingStudent.parentIds) || [];
     const parentAccounts = [];
 
     const primaryParent = await upsertParentByEmail({
-      email: parentEmail,
-      firstName: parentFirstName || fatherFirstName,
-      lastName: parentLastName || fatherLastName,
-      phone: parentPhone,
-      schoolId: existingStudent.schoolId,
-      fallbackFirstName: 'Parent',
-      fallbackLastName: `${firstName || existingStudent.firstName} ${lastName || existingStudent.lastName}`,
+      email: parentEmail, firstName: parentFirstName || fatherFirstName, lastName: parentLastName || fatherLastName,
+      phone: parentPhone, schoolId: existingStudent.schoolId,
+      fallbackFirstName: 'Parent', fallbackLastName: `${firstName || existingStudent.firstName} ${lastName || existingStudent.lastName}`,
     });
     if (primaryParent.parentUser && !linkedParentIds.includes(primaryParent.parentUser.id)) linkedParentIds.push(primaryParent.parentUser.id);
     if (primaryParent.accountInfo) parentAccounts.push(primaryParent.accountInfo);
 
     const secondaryParent = await upsertParentByEmail({
-      email: secondParentEmail,
-      firstName: secondParentFirstName || motherFirstName,
-      lastName: secondParentLastName || motherLastName,
-      phone: secondParentPhone,
-      schoolId: existingStudent.schoolId,
-      fallbackFirstName: 'Guardian',
-      fallbackLastName: `${firstName || existingStudent.firstName} ${lastName || existingStudent.lastName}`,
+      email: secondParentEmail, firstName: secondParentFirstName || motherFirstName, lastName: secondParentLastName || motherLastName,
+      phone: secondParentPhone, schoolId: existingStudent.schoolId,
+      fallbackFirstName: 'Guardian', fallbackLastName: `${firstName || existingStudent.firstName} ${lastName || existingStudent.lastName}`,
     });
     if (secondaryParent.parentUser && !linkedParentIds.includes(secondaryParent.parentUser.id)) linkedParentIds.push(secondaryParent.parentUser.id);
     if (secondaryParent.accountInfo) parentAccounts.push(secondaryParent.accountInfo);
 
-    const student = await prisma.student.update({
-      where: { id: req.params.studentId },
-      data: {
-        firstName: firstName !== undefined ? firstName : undefined,
-        lastName: lastName !== undefined ? lastName : undefined,
-        dateOfBirth: dateOfBirth !== undefined ? (dateOfBirth ? new Date(dateOfBirth) : null) : undefined,
-        enrollmentNumber: enrollmentNumber !== undefined ? (enrollmentNumber || null) : undefined,
-        photo: photo !== undefined ? photo : undefined,
-        schoolId: nextSchoolId,
-        classId: nextClassId,
-        batchId: nextBatchId,
-        isActive: isActive !== undefined ? isActive : undefined,
-        parentIds: linkedParentIds,
-        fatherFirstName: fatherFirstName !== undefined ? fatherFirstName : undefined,
-        fatherLastName: fatherLastName !== undefined ? fatherLastName : undefined,
-        motherFirstName: motherFirstName !== undefined ? motherFirstName : undefined,
-        motherLastName: motherLastName !== undefined ? motherLastName : undefined,
-        guardianFirstName: guardianFirstName !== undefined ? guardianFirstName : undefined,
-        guardianLastName: guardianLastName !== undefined ? guardianLastName : undefined,
-        documents: documents !== undefined ? documents : undefined,
-      },
-    });
+    const sets = [], vals = [];
+    if (firstName !== undefined)        { sets.push('firstName = ?');        vals.push(firstName); }
+    if (lastName !== undefined)         { sets.push('lastName = ?');         vals.push(lastName); }
+    if (dateOfBirth !== undefined)      { sets.push('dateOfBirth = ?');      vals.push(dateOfBirth ? new Date(dateOfBirth) : null); }
+    if (enrollmentNumber !== undefined) { sets.push('enrollmentNumber = ?'); vals.push(enrollmentNumber || null); }
+    if (photo !== undefined)            { sets.push('photo = ?');            vals.push(photo); }
+    if (isActive !== undefined)         { sets.push('isActive = ?');         vals.push(isActive ? 1 : 0); }
+    if (fatherFirstName !== undefined)  { sets.push('fatherFirstName = ?');  vals.push(fatherFirstName); }
+    if (fatherLastName !== undefined)   { sets.push('fatherLastName = ?');   vals.push(fatherLastName); }
+    if (motherFirstName !== undefined)  { sets.push('motherFirstName = ?');  vals.push(motherFirstName); }
+    if (motherLastName !== undefined)   { sets.push('motherLastName = ?');   vals.push(motherLastName); }
+    if (guardianFirstName !== undefined){ sets.push('guardianFirstName = ?'); vals.push(guardianFirstName); }
+    if (guardianLastName !== undefined) { sets.push('guardianLastName = ?'); vals.push(guardianLastName); }
+    if (documents !== undefined)        { sets.push('documents = ?');        vals.push(JSON.stringify(documents)); }
+    sets.push('schoolId = ?', 'classId = ?', 'batchId = ?', 'parentIds = ?', 'updatedAt = NOW()');
+    vals.push(nextSchoolId, nextClassId, nextBatchId, JSON.stringify(linkedParentIds), req.params.studentId);
+
+    await query(`UPDATE Student SET ${sets.join(', ')} WHERE id = ?`, vals);
+
+    const student = await queryOne('SELECT * FROM Student WHERE id = ?', [req.params.studentId]);
 
     if (linkedParentIds.length > 0) {
       await Promise.all(linkedParentIds.map(async (parentId) => {
-        const parentUser = await prisma.user.findUnique({ where: { id: parentId } });
+        const parentUser = await queryOne('SELECT id, parentChildIds FROM `User` WHERE id = ? LIMIT 1', [parentId]);
         if (!parentUser) return;
-        const currentChildren = Array.isArray(parentUser.parentChildIds) ? parentUser.parentChildIds : [];
-        if (!currentChildren.includes(student.id)) {
-          await prisma.user.update({ where: { id: parentId }, data: { parentChildIds: [...currentChildren, student.id] } });
+        const currentChildren = parseJ(parentUser.parentChildIds) || [];
+        if (!currentChildren.includes(req.params.studentId)) {
+          await query('UPDATE `User` SET parentChildIds = ?, updatedAt = NOW() WHERE id = ?', [JSON.stringify([...currentChildren, req.params.studentId]), parentId]);
         }
       }));
     }
@@ -521,7 +444,7 @@ router.put('/student/:studentId', auth, authorize(['school_admin']), async (req,
 router.get('/circulars', auth, authorize(['school_admin']), async (req, res) => {
   try {
     const user = await getCurrentSchoolUser(req.userId);
-    const circulars = await prisma.circular.findMany({ where: { schoolId: user.schoolId }, orderBy: { createdAt: 'desc' } });
+    const circulars = await query('SELECT * FROM Circular WHERE schoolId = ? ORDER BY createdAt DESC', [user.schoolId]);
     res.json(circulars);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -530,21 +453,17 @@ router.get('/circulars', auth, authorize(['school_admin']), async (req, res) => 
 
 router.get('/circulars/feed', auth, authorize(['school_admin', 'teacher', 'parent']), async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.userId }, select: { id: true, role: true, schoolId: true } });
+    const user = await queryOne('SELECT id, role, schoolId FROM `User` WHERE id = ? LIMIT 1', [req.userId]);
     let schoolId = user?.schoolId || null;
 
     if (user?.role === 'parent' && !schoolId) {
-      const child = await prisma.student.findFirst({ where: { parentIds: { array_contains: req.userId } }, select: { schoolId: true } });
+      const child = await queryOne('SELECT schoolId FROM Student WHERE JSON_CONTAINS(parentIds, JSON_QUOTE(?)) LIMIT 1', [req.userId]);
       schoolId = child?.schoolId || null;
     }
 
     if (!schoolId) return res.json([]);
 
-    const circulars = await prisma.circular.findMany({
-      where: { isPublished: true, schoolId },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    const circulars = await query('SELECT * FROM Circular WHERE isPublished = 1 AND schoolId = ? ORDER BY createdAt DESC LIMIT 50', [schoolId]);
     res.json(circulars);
   } catch (err) {
     console.error('Circular feed error:', err);
@@ -557,18 +476,10 @@ router.post('/circular', auth, authorize(['school_admin']), async (req, res) => 
     const { title, description, content, circularType, expiryDate } = req.body;
     const user = await getCurrentSchoolUser(req.userId);
     if (!title || !description) return res.status(400).json({ error: 'Title and description are required' });
-    const circular = await prisma.circular.create({
-      data: {
-        title,
-        description,
-        content: content || '',
-        circularType: circularType || 'general',
-        adminId: req.userId,
-        schoolId: user.schoolId,
-        expiryDate: expiryDate ? new Date(expiryDate) : null,
-        isPublished: true,
-      },
-    });
+    const id = newId();
+    await query('INSERT INTO Circular (id, title, description, content, circularType, adminId, schoolId, expiryDate, isPublished, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
+      [id, title, description, content || '', circularType || 'general', req.userId, user.schoolId, expiryDate ? new Date(expiryDate) : null]);
+    const circular = await queryOne('SELECT * FROM Circular WHERE id = ?', [id]);
     res.status(201).json({ message: 'Circular created', circular });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -577,26 +488,21 @@ router.post('/circular', auth, authorize(['school_admin']), async (req, res) => 
 
 router.delete('/circular/:circularId', auth, authorize(['school_admin']), async (req, res) => {
   try {
-    await prisma.circular.delete({ where: { id: req.params.circularId } });
+    await query('DELETE FROM Circular WHERE id = ?', [req.params.circularId]);
     res.json({ message: 'Circular deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ─── Pickup Requests (admin management) ─────────────────────────────────────
-
 router.get('/pickup-requests', auth, authorize(['school_admin']), async (req, res) => {
   try {
     const user = await getCurrentSchoolUser(req.userId);
-    const requests = await prisma.pickupRequest.findMany({
-      where: { schoolId: user.schoolId },
-      include: {
-        student: { select: { id: true, firstName: true, lastName: true } },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    res.json(requests);
+    const requests = await query('SELECT pr.*, s.id AS studentRelId, s.firstName AS studentFirstName, s.lastName AS studentLastName FROM PickupRequest pr LEFT JOIN Student s ON pr.studentId = s.id WHERE pr.schoolId = ? ORDER BY pr.createdAt DESC', [user.schoolId]);
+    res.json(requests.map(r => ({
+      ...r,
+      student: r.studentRelId ? { id: r.studentRelId, firstName: r.studentFirstName, lastName: r.studentLastName } : null,
+    })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -605,58 +511,42 @@ router.get('/pickup-requests', auth, authorize(['school_admin']), async (req, re
 router.put('/pickup-request/:requestId', auth, authorize(['school_admin']), async (req, res) => {
   try {
     const { status, adminNotes } = req.body;
-    if (!['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ error: 'Status must be approved or rejected' });
-    }
-    const updated = await prisma.pickupRequest.update({
-      where: { id: req.params.requestId },
-      data: { status, adminNotes: adminNotes || null },
-    });
+    if (!['approved', 'rejected'].includes(status)) return res.status(400).json({ error: 'Status must be approved or rejected' });
+    await query('UPDATE PickupRequest SET status = ?, adminNotes = ?, updatedAt = NOW() WHERE id = ?', [status, adminNotes || null, req.params.requestId]);
+    const updated = await queryOne('SELECT * FROM PickupRequest WHERE id = ?', [req.params.requestId]);
     res.json({ message: `Request ${status}`, request: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ─── PTM Requests (admin approval) ─────────────────────────────────────────
-
 router.get('/ptm-requests', auth, authorize(['school_admin']), async (req, res) => {
   try {
     const user = await getCurrentSchoolUser(req.userId);
-    const requests = await prisma.pTMRequest.findMany({
-      where: { schoolId: user.schoolId },
-      orderBy: { createdAt: 'desc' },
-    });
+    const requests = await query('SELECT * FROM PTMRequest WHERE schoolId = ? ORDER BY createdAt DESC', [user.schoolId]);
 
-    const studentIds = [...new Set(requests.map((request) => request.studentId).filter(Boolean))];
-    const parentIds = [...new Set(requests.map((request) => request.parentId).filter(Boolean))];
-    const teacherIds = [...new Set(requests.map((request) => request.teacherId).filter(Boolean))];
+    const studentIds = [...new Set(requests.map(r => r.studentId).filter(Boolean))];
+    const parentIds  = [...new Set(requests.map(r => r.parentId).filter(Boolean))];
+    const teacherIds = [...new Set(requests.map(r => r.teacherId).filter(Boolean))];
+
+    const inList = (ids) => ids.map(() => '?').join(',');
 
     const [students, parents, teachers] = await Promise.all([
-      prisma.student.findMany({
-        where: { id: { in: studentIds } },
-        select: { id: true, firstName: true, lastName: true, batchId: true },
-      }),
-      prisma.user.findMany({
-        where: { id: { in: parentIds } },
-        select: { id: true, firstName: true, lastName: true, email: true, phone: true },
-      }),
-      prisma.user.findMany({
-        where: { id: { in: teacherIds } },
-        select: { id: true, firstName: true, lastName: true },
-      }),
+      studentIds.length ? query(`SELECT id, firstName, lastName, batchId FROM Student WHERE id IN (${inList(studentIds)})`, studentIds) : [],
+      parentIds.length  ? query(`SELECT id, firstName, lastName, email, phone FROM \`User\` WHERE id IN (${inList(parentIds)})`, parentIds)  : [],
+      teacherIds.length ? query(`SELECT id, firstName, lastName FROM \`User\` WHERE id IN (${inList(teacherIds)})`, teacherIds) : [],
     ]);
 
-    const studentMap = Object.fromEntries(students.map((student) => [student.id, student]));
-    const parentMap = Object.fromEntries(parents.map((parent) => [parent.id, parent]));
-    const teacherMap = Object.fromEntries(teachers.map((teacher) => [teacher.id, teacher]));
+    const studentMap = Object.fromEntries(students.map(s => [s.id, s]));
+    const parentMap  = Object.fromEntries(parents.map(p => [p.id, p]));
+    const teacherMap = Object.fromEntries(teachers.map(t => [t.id, t]));
 
-    res.json(requests.map((request) => ({
-      ...request,
-      student: studentMap[request.studentId] || null,
-      parent: parentMap[request.parentId] || null,
-      teacherName: request.teacherId && teacherMap[request.teacherId]
-        ? `${teacherMap[request.teacherId].firstName} ${teacherMap[request.teacherId].lastName}`
+    res.json(requests.map(r => ({
+      ...r,
+      student: studentMap[r.studentId] || null,
+      parent: parentMap[r.parentId] || null,
+      teacherName: r.teacherId && teacherMap[r.teacherId]
+        ? `${teacherMap[r.teacherId].firstName} ${teacherMap[r.teacherId].lastName}`
         : null,
     })));
   } catch (err) {
@@ -668,27 +558,13 @@ router.get('/ptm-requests', auth, authorize(['school_admin']), async (req, res) 
 router.patch('/ptm-request/:requestId', auth, authorize(['school_admin']), async (req, res) => {
   try {
     const { status, meetingDate, startTime, endTime, location, adminNotes, teacherId } = req.body;
-    if (!['approved', 'rejected'].includes(status)) {
-      return res.status(400).json({ error: 'Status must be approved or rejected' });
-    }
-
+    if (!['approved', 'rejected'].includes(status)) return res.status(400).json({ error: 'Status must be approved or rejected' });
     if (status === 'approved' && (!meetingDate || !startTime || !endTime)) {
       return res.status(400).json({ error: 'meetingDate, startTime and endTime are required to approve a PTM request' });
     }
-
-    const updated = await prisma.pTMRequest.update({
-      where: { id: req.params.requestId },
-      data: {
-        status,
-        meetingDate: meetingDate ? new Date(meetingDate) : null,
-        startTime: startTime || null,
-        endTime: endTime || null,
-        location: location || null,
-        adminNotes: adminNotes || null,
-        teacherId: teacherId || null,
-      },
-    });
-
+    await query('UPDATE PTMRequest SET status = ?, meetingDate = ?, startTime = ?, endTime = ?, location = ?, adminNotes = ?, teacherId = ?, updatedAt = NOW() WHERE id = ?',
+      [status, meetingDate ? new Date(meetingDate) : null, startTime || null, endTime || null, location || null, adminNotes || null, teacherId || null, req.params.requestId]);
+    const updated = await queryOne('SELECT * FROM PTMRequest WHERE id = ?', [req.params.requestId]);
     res.json({ message: `PTM request ${status}`, request: updated });
   } catch (err) {
     console.error('Update PTM request error:', err);

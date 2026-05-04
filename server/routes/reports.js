@@ -1,51 +1,37 @@
 const express = require('express');
 const { auth, authorize } = require('../middleware/auth');
-const prisma = require('../src/lib/prisma');
+const { query, queryOne, newId, parseJ, toJ } = require('../src/lib/db');
 
 const router = express.Router();
 
-// ─── Helper: compute month stats from live data ───────────────────────────────
 async function computeStats(studentId, batchId, month, year) {
   const startDate = new Date(year, month - 1, 1);
   const endDate   = new Date(year, month, 1);
 
   const [attendanceRecords, activityLogs, milestones, incidents] = await Promise.all([
-    prisma.attendance.findMany({
-      where: { studentId, batchId, date: { gte: startDate, lt: endDate } },
-    }),
-    prisma.activityLog.findMany({
-      where: { studentId, date: { gte: startDate, lt: endDate } },
-    }),
-    prisma.milestone.findMany({ where: { studentId, month, year } }),
-    prisma.incidentReport.findMany({
-      where: { studentId, incidentTime: { gte: startDate, lt: endDate } },
-      select: { id: true, incidentType: true, severity: true, incidentTime: true, description: true },
-    }),
+    query('SELECT * FROM Attendance WHERE studentId = ? AND batchId = ? AND date >= ? AND date < ?', [studentId, batchId, startDate, endDate]),
+    query('SELECT * FROM ActivityLog WHERE studentId = ? AND date >= ? AND date < ?', [studentId, startDate, endDate]),
+    query('SELECT * FROM Milestone WHERE studentId = ? AND month = ? AND year = ?', [studentId, month, year]),
+    query('SELECT id, incidentType, severity, incidentTime, description FROM IncidentReport WHERE studentId = ? AND incidentTime >= ? AND incidentTime < ?', [studentId, startDate, endDate]),
   ]);
 
   const totalDays    = attendanceRecords.length;
-  const presentDays  = attendanceRecords.filter(a => ['present', 'late', 'half_day'].includes(a.status)).length;
+  const presentDays  = attendanceRecords.filter(a => ['present','late','half_day'].includes(a.status)).length;
   const absentDays   = attendanceRecords.filter(a => a.status === 'absent').length;
   const lateDays     = attendanceRecords.filter(a => a.status === 'late').length;
   const attendancePct = totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0;
 
   const moodMap = {};
-  activityLogs.forEach(l => {
-    if (l.moodAtArrival) moodMap[l.moodAtArrival] = (moodMap[l.moodAtArrival] || 0) + 1;
-  });
-  const topArrivalMood = Object.entries(moodMap).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  activityLogs.forEach(l => { if (l.moodAtArrival) moodMap[l.moodAtArrival] = (moodMap[l.moodAtArrival] || 0) + 1; });
+  const topArrivalMood = Object.entries(moodMap).sort((a,b) => b[1]-a[1])[0]?.[0] || null;
 
-  const napLogs   = activityLogs.filter(l => l.napDuration);
-  const avgNapMin = napLogs.length > 0
-    ? Math.round(napLogs.reduce((s, l) => s + (l.napDuration || 0), 0) / napLogs.length)
-    : null;
+  const napLogs  = activityLogs.filter(l => l.napDuration);
+  const avgNapMin = napLogs.length > 0 ? Math.round(napLogs.reduce((s,l) => s + (l.napDuration || 0), 0) / napLogs.length) : null;
 
   const mealLogs = activityLogs.filter(l => l.activityType === 'meal' && l.intakeLevel);
   const mealIntakeMap = {};
-  mealLogs.forEach(l => {
-    if (l.intakeLevel) mealIntakeMap[l.intakeLevel] = (mealIntakeMap[l.intakeLevel] || 0) + 1;
-  });
-  const topMealIntake = Object.entries(mealIntakeMap).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+  mealLogs.forEach(l => { if (l.intakeLevel) mealIntakeMap[l.intakeLevel] = (mealIntakeMap[l.intakeLevel] || 0) + 1; });
+  const topMealIntake = Object.entries(mealIntakeMap).sort((a,b) => b[1]-a[1])[0]?.[0] || null;
 
   return {
     attendance: { totalDays, presentDays, absentDays, lateDays, attendancePct },
@@ -61,72 +47,50 @@ async function computeStats(studentId, batchId, month, year) {
   };
 }
 
-// ─── POST /reports/generate ──────────────────────────────────────────────────
 router.post('/generate', auth, authorize(['teacher']), async (req, res) => {
   try {
     const { studentId, batchId, month, year } = req.body;
-    if (!studentId || !batchId || !month || !year)
-      return res.status(400).json({ error: 'studentId, batchId, month, year are required' });
+    if (!studentId || !batchId || !month || !year) return res.status(400).json({ error: 'studentId, batchId, month, year are required' });
 
-    const teacher = await prisma.user.findUnique({
-      where: { id: req.userId },
-      select: { schoolId: true },
-    });
+    const teacher = await queryOne('SELECT schoolId FROM `User` WHERE id = ? LIMIT 1', [req.userId]);
     if (!teacher?.schoolId) return res.status(403).json({ error: 'Teacher not linked to a school' });
 
-    const student = await prisma.student.findFirst({
-      where: { id: studentId, schoolId: teacher.schoolId },
-      select: { id: true, firstName: true, lastName: true, photo: true },
-    });
+    const student = await queryOne('SELECT id, firstName, lastName, photo FROM Student WHERE id = ? AND schoolId = ? LIMIT 1', [studentId, teacher.schoolId]);
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
-    const iMonth = parseInt(month);
-    const iYear  = parseInt(year);
-    const stats  = await computeStats(studentId, batchId, iMonth, iYear);
+    const iMonth = parseInt(month), iYear = parseInt(year);
+    const stats = await computeStats(studentId, batchId, iMonth, iYear);
 
-    const DOMAINS = ['social', 'emotional', 'motor', 'language', 'cognitive'];
+    const DOMAINS = ['social','emotional','motor','language','cognitive'];
     const milestonesByDomain = {};
     stats.milestones.list.forEach(m => {
       if (!milestonesByDomain[m.domain]) milestonesByDomain[m.domain] = [];
       milestonesByDomain[m.domain].push({ milestone: m.milestone, isAchieved: m.isAchieved });
     });
 
-    const defaultDomains = DOMAINS.map(d => ({
-      domain:     d,
-      rating:     'developing',
-      notes:      '',
-      milestones: milestonesByDomain[d] || [],
-    }));
+    const defaultDomains = DOMAINS.map(d => ({ domain: d, rating: 'developing', notes: '', milestones: milestonesByDomain[d] || [] }));
 
-    let report = await prisma.report.findFirst({
-      where: { studentId, batchId, month: iMonth, year: iYear },
-    });
+    let report = await queryOne('SELECT * FROM Report WHERE studentId = ? AND batchId = ? AND month = ? AND year = ? LIMIT 1', [studentId, batchId, iMonth, iYear]);
 
     if (report) {
-      const existingDomains = Array.isArray(report.domains) ? report.domains : defaultDomains;
-      const mergedDomains   = existingDomains.map(d => ({
-        ...d,
-        milestones: milestonesByDomain[d.domain] || d.milestones || [],
-      }));
-      report = await prisma.report.update({
-        where: { id: report.id },
-        data:  { domains: mergedDomains },
-      });
+      const existing = parseJ(report.domains) || defaultDomains;
+      const merged   = existing.map(d => ({ ...d, milestones: milestonesByDomain[d.domain] || d.milestones || [] }));
+      await query('UPDATE Report SET domains = ?, updatedAt = NOW() WHERE id = ?', [JSON.stringify(merged), report.id]);
+      report = await queryOne('SELECT * FROM Report WHERE id = ?', [report.id]);
     } else {
-      report = await prisma.report.create({
-        data: {
-          studentId,
-          batchId,
-          teacherId:             req.userId,
-          month:                 iMonth,
-          year:                  iYear,
-          domains:               defaultDomains,
-          highlights:            [],
-          areasForImprovement:   [],
-          recommendedActivities: [],
-          reportStatus:          'draft',
-        },
-      });
+      const id = newId();
+      await query(
+        'INSERT INTO Report (id, studentId, batchId, teacherId, month, year, domains, highlights, areasForImprovement, recommendedActivities, reportStatus, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
+        [id, studentId, batchId, req.userId, iMonth, iYear, JSON.stringify(defaultDomains), JSON.stringify([]), JSON.stringify([]), JSON.stringify([]), 'draft']
+      );
+      report = await queryOne('SELECT * FROM Report WHERE id = ?', [id]);
+    }
+
+    if (report) {
+      report.domains = parseJ(report.domains);
+      report.highlights = parseJ(report.highlights);
+      report.areasForImprovement = parseJ(report.areasForImprovement);
+      report.recommendedActivities = parseJ(report.recommendedActivities);
     }
 
     res.json({ report, stats, student });
@@ -136,31 +100,23 @@ router.post('/generate', auth, authorize(['teacher']), async (req, res) => {
   }
 });
 
-// ─── GET /reports/batch/:batchId?month=&year= ────────────────────────────────
 router.get('/batch/:batchId', auth, authorize(['teacher']), async (req, res) => {
   try {
-    const { batchId } = req.params;
-    const month       = parseInt(req.query.month);
-    const year        = parseInt(req.query.year);
+    const month = parseInt(req.query.month), year = parseInt(req.query.year);
     if (!month || !year) return res.status(400).json({ error: 'month and year are required' });
 
-    const teacher = await prisma.user.findUnique({
-      where: { id: req.userId },
-      select: { schoolId: true },
-    });
+    const teacher = await queryOne('SELECT schoolId FROM `User` WHERE id = ? LIMIT 1', [req.userId]);
     if (!teacher?.schoolId) return res.status(403).json({ error: 'Teacher not linked to a school' });
 
-    const students = await prisma.student.findMany({
-      where: { batchId, schoolId: teacher.schoolId, isActive: true },
-      select: { id: true, firstName: true, lastName: true, photo: true },
-      orderBy: [{ firstName: 'asc' }],
-    });
+    const students = await query(
+      'SELECT id, firstName, lastName, photo FROM Student WHERE batchId = ? AND schoolId = ? AND isActive = 1 ORDER BY firstName ASC',
+      [req.params.batchId, teacher.schoolId]
+    );
 
-    const reports = await prisma.report.findMany({
-      where: { batchId, month, year, studentId: { in: students.map(s => s.id) } },
-      select: { id: true, studentId: true, reportStatus: true, updatedAt: true, sentToParentOn: true },
-    });
-
+    const reports = await query(
+      'SELECT id, studentId, reportStatus, updatedAt, sentToParentOn FROM Report WHERE batchId = ? AND month = ? AND year = ?',
+      [req.params.batchId, month, year]
+    );
     const reportMap = {};
     reports.forEach(r => { reportMap[r.studentId] = r; });
 
@@ -170,101 +126,86 @@ router.get('/batch/:batchId', auth, authorize(['teacher']), async (req, res) => 
   }
 });
 
-// ─── GET /reports/student/:studentId ─────────────────────────────────────────
 router.get('/student/:studentId', auth, async (req, res) => {
   try {
-    const { studentId } = req.params;
-    const whereClause   = { studentId };
-    if (req.userRole === 'parent') whereClause.reportStatus = 'sent_to_parent';
-
-    const reports = await prisma.report.findMany({
-      where:   whereClause,
-      orderBy: [{ year: 'desc' }, { month: 'desc' }],
-      select: {
-        id: true, month: true, year: true, reportStatus: true,
-        overallSummary: true, sentToParentOn: true, updatedAt: true, teacherId: true,
-      },
-    });
-
-    const teacherIds = [...new Set(reports.map(r => r.teacherId))];
-    const teachers   = await prisma.user.findMany({
-      where:  { id: { in: teacherIds } },
-      select: { id: true, firstName: true, lastName: true },
-    });
-    const teacherMap = {};
-    teachers.forEach(t => { teacherMap[t.id] = t; });
-
-    res.json(reports.map(r => ({ ...r, teacher: teacherMap[r.teacherId] || null })));
+    const whereStatus = req.userRole === 'parent' ? "AND reportStatus = 'sent_to_parent'" : '';
+    const reports = await query(
+      `SELECT id, month, year, reportStatus, overallSummary, sentToParentOn, updatedAt, teacherId FROM Report WHERE studentId = ? ${whereStatus} ORDER BY year DESC, month DESC`,
+      [req.params.studentId]
+    );
+    const teacherIds = [...new Set(reports.map(r => r.teacherId).filter(Boolean))];
+    const teachers = teacherIds.length ? await query(`SELECT id, firstName, lastName FROM \`User\` WHERE id IN (${teacherIds.map(() => '?').join(',')})`, teacherIds) : [];
+    const tMap = Object.fromEntries(teachers.map(t => [t.id, t]));
+    res.json(reports.map(r => ({ ...r, teacher: tMap[r.teacherId] || null })));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ─── GET /reports/:reportId ───────────────────────────────────────────────────
 router.get('/:reportId', auth, async (req, res) => {
   try {
-    const report = await prisma.report.findUnique({ where: { id: req.params.reportId } });
+    const report = await queryOne('SELECT * FROM Report WHERE id = ? LIMIT 1', [req.params.reportId]);
     if (!report) return res.status(404).json({ error: 'Report not found' });
+    if (req.userRole === 'parent' && report.reportStatus !== 'sent_to_parent') return res.status(403).json({ error: 'Report not yet published' });
 
-    if (req.userRole === 'parent' && report.reportStatus !== 'sent_to_parent')
-      return res.status(403).json({ error: 'Report not yet published' });
+    report.domains = parseJ(report.domains);
+    report.highlights = parseJ(report.highlights);
+    report.areasForImprovement = parseJ(report.areasForImprovement);
+    report.recommendedActivities = parseJ(report.recommendedActivities);
 
     const [student, teacher, stats] = await Promise.all([
-      prisma.student.findUnique({
-        where:  { id: report.studentId },
-        select: { id: true, firstName: true, lastName: true, photo: true, dateOfBirth: true },
-      }),
-      prisma.user.findUnique({
-        where:  { id: report.teacherId },
-        select: { id: true, firstName: true, lastName: true, photo: true },
-      }),
+      queryOne('SELECT id, firstName, lastName, photo, dateOfBirth FROM Student WHERE id = ? LIMIT 1', [report.studentId]),
+      queryOne('SELECT id, firstName, lastName, photo FROM `User` WHERE id = ? LIMIT 1', [report.teacherId]),
       computeStats(report.studentId, report.batchId, report.month, report.year),
     ]);
-
     res.json({ report, student, teacher, stats });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ─── PATCH /reports/:reportId ─────────────────────────────────────────────────
 router.patch('/:reportId', auth, authorize(['teacher']), async (req, res) => {
   try {
-    const {
-      domains, overallSummary, highlights,
-      areasForImprovement, recommendedActivities, reportStatus,
-    } = req.body;
-
-    const existing = await prisma.report.findUnique({ where: { id: req.params.reportId } });
+    const { domains, overallSummary, highlights, areasForImprovement, recommendedActivities, reportStatus } = req.body;
+    const existing = await queryOne('SELECT id, teacherId FROM Report WHERE id = ? LIMIT 1', [req.params.reportId]);
     if (!existing) return res.status(404).json({ error: 'Report not found' });
     if (existing.teacherId !== req.userId) return res.status(403).json({ error: 'Not authorized' });
 
-    const updateData = {};
-    if (domains               !== undefined) updateData.domains               = domains;
-    if (overallSummary        !== undefined) updateData.overallSummary        = overallSummary;
-    if (highlights            !== undefined) updateData.highlights            = highlights;
-    if (areasForImprovement   !== undefined) updateData.areasForImprovement   = areasForImprovement;
-    if (recommendedActivities !== undefined) updateData.recommendedActivities = recommendedActivities;
-    if (reportStatus          !== undefined) updateData.reportStatus          = reportStatus;
+    const sets = [], vals = [];
+    if (domains !== undefined)               { sets.push('domains = ?');               vals.push(JSON.stringify(domains)); }
+    if (overallSummary !== undefined)        { sets.push('overallSummary = ?');        vals.push(overallSummary); }
+    if (highlights !== undefined)            { sets.push('highlights = ?');            vals.push(JSON.stringify(highlights)); }
+    if (areasForImprovement !== undefined)   { sets.push('areasForImprovement = ?');   vals.push(JSON.stringify(areasForImprovement)); }
+    if (recommendedActivities !== undefined) { sets.push('recommendedActivities = ?'); vals.push(JSON.stringify(recommendedActivities)); }
+    if (reportStatus !== undefined)          { sets.push('reportStatus = ?');          vals.push(reportStatus); }
+    sets.push('updatedAt = NOW()');
+    vals.push(req.params.reportId);
 
-    const report = await prisma.report.update({ where: { id: req.params.reportId }, data: updateData });
+    await query(`UPDATE Report SET ${sets.join(', ')} WHERE id = ?`, vals);
+    const report = await queryOne('SELECT * FROM Report WHERE id = ?', [req.params.reportId]);
+    if (report) {
+      report.domains = parseJ(report.domains);
+      report.highlights = parseJ(report.highlights);
+      report.areasForImprovement = parseJ(report.areasForImprovement);
+      report.recommendedActivities = parseJ(report.recommendedActivities);
+    }
     res.json({ report });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ─── POST /reports/:reportId/send ─────────────────────────────────────────────
 router.post('/:reportId/send', auth, authorize(['teacher']), async (req, res) => {
   try {
-    const existing = await prisma.report.findUnique({ where: { id: req.params.reportId } });
+    const existing = await queryOne('SELECT id, teacherId FROM Report WHERE id = ? LIMIT 1', [req.params.reportId]);
     if (!existing) return res.status(404).json({ error: 'Report not found' });
     if (existing.teacherId !== req.userId) return res.status(403).json({ error: 'Not authorized' });
-
-    const report = await prisma.report.update({
-      where: { id: req.params.reportId },
-      data:  { reportStatus: 'sent_to_parent', sentToParentOn: new Date() },
-    });
+    await query("UPDATE Report SET reportStatus = 'sent_to_parent', sentToParentOn = NOW(), updatedAt = NOW() WHERE id = ?", [req.params.reportId]);
+    const report = await queryOne('SELECT * FROM Report WHERE id = ?', [req.params.reportId]);
+    if (report) {
+      report.domains = parseJ(report.domains);
+      report.highlights = parseJ(report.highlights);
+    }
     res.json({ report });
   } catch (err) {
     res.status(500).json({ error: err.message });

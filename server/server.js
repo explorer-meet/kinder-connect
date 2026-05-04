@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
-const prisma = require('./src/lib/prisma');
+const { pool } = require('./src/lib/db');
 
 dotenv.config();
 
@@ -15,11 +15,11 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
-// Database Connection (MySQL via Prisma)
+// Database Connection (mysql2)
 const connectDB = async () => {
   try {
-    await prisma.$connect();
-    console.log('✅ MySQL Connected (Prisma)');
+    await pool.execute('SELECT 1');
+    console.log('✅ MySQL Connected');
   } catch (err) {
     console.error('❌ MySQL Connection Failed:', err.message);
     process.exit(1);
@@ -44,7 +44,7 @@ app.use('/api/reports', require('./routes/reports'));
 // Health Check
 app.get('/api/health', async (req, res) => {
   try {
-    await prisma.$queryRaw`SELECT 1`;
+    await pool.execute('SELECT 1');
     res.json({ status: 'Server is running', db: 'mysql', timestamp: new Date() });
   } catch (err) {
     res.status(500).json({ status: 'Server is running', db: 'mysql_disconnected', error: err.message, timestamp: new Date() });
@@ -70,9 +70,9 @@ const shutdown = async (signal, exitCode = 0) => {
   }
 
   try {
-    await prisma.$disconnect();
+    await pool.end();
   } catch (err) {
-    console.error('Error while disconnecting Prisma:', err.message);
+    console.error('Error while closing DB pool:', err.message);
   }
 
   if (signal === 'SIGUSR2') {
