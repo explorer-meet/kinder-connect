@@ -10,7 +10,7 @@ router.get('/children', auth, authorize(['parent']), async (req, res) => {
     const children = await query(
       `SELECT s.*, c.name AS className, c.section, sc.name AS schoolName
        FROM student s
-       LEFT JOIN \`Class\` c ON s.classId = c.id
+       LEFT JOIN \`class\` c ON s.classId = c.id
        LEFT JOIN school sc ON s.schoolId = sc.id
        WHERE JSON_CONTAINS(s.parentIds, JSON_QUOTE(?))`,
       [req.userId]
@@ -38,7 +38,7 @@ router.get('/child/:studentId/feed', auth, authorize(['parent']), async (req, re
       query(
         `SELECT a.*, u.firstName AS teacherFirstName, u.lastName AS teacherLastName
          FROM activitylog a
-         LEFT JOIN \`User\` u ON a.teacherId = u.id
+         LEFT JOIN \`user\` u ON a.teacherId = u.id
          WHERE (a.studentId = ? AND a.activityType = 'respective')
             OR (a.batchId = ? AND a.activityType IN ('general','class_note'))
          ORDER BY a.createdAt DESC LIMIT 50`,
@@ -60,7 +60,7 @@ router.get('/child/:studentId/report/:month/:year', auth, authorize(['parent']),
     const report = await queryOne(
       `SELECT r.*, u.firstName AS teacherFirstName, u.lastName AS teacherLastName
        FROM report r
-       LEFT JOIN \`User\` u ON r.teacherId = u.id
+       LEFT JOIN \`user\` u ON r.teacherId = u.id
        WHERE r.studentId = ? AND r.month = ? AND r.year = ? LIMIT 1`,
       [req.params.studentId, parseInt(req.params.month), parseInt(req.params.year)]
     );
@@ -92,8 +92,8 @@ router.get('/messages/:teacherId', auth, authorize(['parent']), async (req, res)
          su.firstName AS senderFirstName, su.lastName AS senderLastName,
          ru.firstName AS recipientFirstName, ru.lastName AS recipientLastName
        FROM message m
-       LEFT JOIN \`User\` su ON m.senderId = su.id
-       LEFT JOIN \`User\` ru ON m.recipientId = ru.id
+       LEFT JOIN \`user\` su ON m.senderId = su.id
+       LEFT JOIN \`user\` ru ON m.recipientId = ru.id
        WHERE (m.senderId = ? AND m.recipientId = ?) OR (m.senderId = ? AND m.recipientId = ?)
        ORDER BY m.createdAt DESC`,
       [req.userId, req.params.teacherId, req.params.teacherId, req.userId]
@@ -164,7 +164,7 @@ router.get('/child/:studentId/incidents', auth, authorize(['parent']), async (re
   try {
     const incidents = await query('SELECT * FROM incidentreport WHERE studentId = ? ORDER BY incidentTime DESC', [req.params.studentId]);
     const teacherIds = [...new Set(incidents.map(i => i.teacherId).filter(Boolean))];
-    const teachers = teacherIds.length ? await query(`SELECT id, firstName, lastName FROM \`User\` WHERE id IN (${teacherIds.map(() => '?').join(',')})`, teacherIds) : [];
+    const teachers = teacherIds.length ? await query(`SELECT id, firstName, lastName FROM \`user\` WHERE id IN (${teacherIds.map(() => '?').join(',')})`, teacherIds) : [];
     const tMap = Object.fromEntries(teachers.map(t => [t.id, `${t.firstName} ${t.lastName}`]));
     res.json(incidents.map(i => ({ ...i, teacherName: tMap[i.teacherId] || 'Teacher' })));
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -175,7 +175,7 @@ router.get('/child/:studentId/milestones', auth, authorize(['parent']), async (r
   try {
     const milestones = await query('SELECT * FROM milestone WHERE studentId = ? ORDER BY isAchieved ASC, createdAt DESC', [req.params.studentId]);
     const teacherIds = [...new Set(milestones.map(m => m.teacherId).filter(Boolean))];
-    const teachers = teacherIds.length ? await query(`SELECT id, firstName, lastName FROM \`User\` WHERE id IN (${teacherIds.map(() => '?').join(',')})`, teacherIds) : [];
+    const teachers = teacherIds.length ? await query(`SELECT id, firstName, lastName FROM \`user\` WHERE id IN (${teacherIds.map(() => '?').join(',')})`, teacherIds) : [];
     const tMap = Object.fromEntries(teachers.map(t => [t.id, `${t.firstName} ${t.lastName}`]));
     res.json(milestones.map(m => ({ ...m, teacherName: tMap[m.teacherId] || 'Teacher' })));
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -230,7 +230,7 @@ router.get('/ptm/slots', auth, authorize(['parent']), async (req, res) => {
     const teacherIds = [...new Set(slots.map(s => s.teacherId).filter(Boolean))];
     const studentIds = [...new Set(slots.map(s => s.studentId).filter(Boolean))];
     const [teachers, students] = await Promise.all([
-      teacherIds.length ? query(`SELECT id, firstName, lastName FROM \`User\` WHERE id IN (${teacherIds.map(() => '?').join(',')})`, teacherIds) : [],
+      teacherIds.length ? query(`SELECT id, firstName, lastName FROM \`user\` WHERE id IN (${teacherIds.map(() => '?').join(',')})`, teacherIds) : [],
       studentIds.length ? query(`SELECT id, firstName, lastName FROM student WHERE id IN (${studentIds.map(() => '?').join(',')})`, studentIds) : [],
     ]);
     const teacherMap = Object.fromEntries(teachers.map(t => [t.id, t]));
@@ -281,7 +281,7 @@ router.get('/ptm/requests', auth, authorize(['parent']), async (req, res) => {
     const teacherIds = [...new Set(requests.map(r => r.teacherId).filter(Boolean))];
     const [students, teachers] = await Promise.all([
       studentIds.length ? query(`SELECT id, firstName, lastName FROM student WHERE id IN (${studentIds.map(() => '?').join(',')})`, studentIds) : [],
-      teacherIds.length ? query(`SELECT id, firstName, lastName FROM \`User\` WHERE id IN (${teacherIds.map(() => '?').join(',')})`, teacherIds) : [],
+      teacherIds.length ? query(`SELECT id, firstName, lastName FROM \`user\` WHERE id IN (${teacherIds.map(() => '?').join(',')})`, teacherIds) : [],
     ]);
     const sMap = Object.fromEntries(students.map(s => [s.id, s]));
     const tMap = Object.fromEntries(teachers.map(t => [t.id, t]));

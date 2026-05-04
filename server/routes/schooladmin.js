@@ -142,7 +142,7 @@ router.put('/staff/:staffId', auth, authorize(['school_admin']), async (req, res
     sets.push('updatedAt = NOW()');
     vals.push(req.params.staffId);
 
-    await query(`UPDATE \`User\` SET ${sets.join(', ')} WHERE id = ?`, vals);
+    await query(`UPDATE \`user\` SET ${sets.join(', ')} WHERE id = ?`, vals);
     const staff = await queryOne('SELECT * FROM `user` WHERE id = ?', [req.params.staffId]);
     res.json({ message: 'Staff updated', staff });
   } catch (err) {
@@ -262,7 +262,7 @@ router.get('/students', auth, authorize(['school_admin']), async (req, res) => {
       `SELECT s.*, sc.id AS schoolRelId, sc.name AS schoolName, c.id AS classRelId, c.name AS className, c.section, b.id AS batchRelId, b.shiftName, b.startTime AS batchStartTime, b.endTime AS batchEndTime
        FROM student s
        LEFT JOIN school sc ON s.schoolId = sc.id
-       LEFT JOIN \`Class\` c ON s.classId = c.id
+       LEFT JOIN \`class\` c ON s.classId = c.id
        LEFT JOIN batch b ON s.batchId = b.id
        WHERE s.schoolId = ? ORDER BY s.createdAt DESC`,
       [user.schoolId]
@@ -533,8 +533,8 @@ router.get('/ptm-requests', auth, authorize(['school_admin']), async (req, res) 
 
     const [students, parents, teachers] = await Promise.all([
       studentIds.length ? query(`SELECT id, firstName, lastName, batchId FROM student WHERE id IN (${inList(studentIds)})`, studentIds) : [],
-      parentIds.length  ? query(`SELECT id, firstName, lastName, email, phone FROM \`User\` WHERE id IN (${inList(parentIds)})`, parentIds)  : [],
-      teacherIds.length ? query(`SELECT id, firstName, lastName FROM \`User\` WHERE id IN (${inList(teacherIds)})`, teacherIds) : [],
+      parentIds.length  ? query(`SELECT id, firstName, lastName, email, phone FROM \`user\` WHERE id IN (${inList(parentIds)})`, parentIds)  : [],
+      teacherIds.length ? query(`SELECT id, firstName, lastName FROM \`user\` WHERE id IN (${inList(teacherIds)})`, teacherIds) : [],
     ]);
 
     const studentMap = Object.fromEntries(students.map(s => [s.id, s]));

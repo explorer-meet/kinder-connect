@@ -47,7 +47,7 @@ router.put('/profile', auth, authorize(['teacher']), async (req, res) => {
     sets.push('updatedAt = NOW()');
     vals.push(req.userId);
 
-    await query(`UPDATE \`User\` SET ${sets.join(', ')} WHERE id = ?`, vals);
+    await query(`UPDATE \`user\` SET ${sets.join(', ')} WHERE id = ?`, vals);
     const user = await queryOne(
       'SELECT id, firstName, lastName, email, phone, photo, address, qualification, dateOfJoining, emergencyContactName, emergencyContactPhone FROM `user` WHERE id = ? LIMIT 1',
       [req.userId]
@@ -147,7 +147,7 @@ router.get('/medical/student/:studentId', auth, authorize(['teacher']), async (r
       `SELECT s.id, s.firstName, s.lastName, s.enrollmentNumber, s.dateOfBirth, s.schoolId, s.allergies, s.medicalNotes, s.medicalProfile,
        c.id AS classRelId, c.name AS className, c.section, b.id AS batchRelId, b.shiftName, b.startTime AS batchStartTime, b.endTime AS batchEndTime
        FROM student s
-       LEFT JOIN \`Class\` c ON s.classId = c.id
+       LEFT JOIN \`class\` c ON s.classId = c.id
        LEFT JOIN batch b ON s.batchId = b.id
        WHERE s.id = ? LIMIT 1`,
       [req.params.studentId]

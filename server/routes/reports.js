@@ -134,7 +134,7 @@ router.get('/student/:studentId', auth, async (req, res) => {
       [req.params.studentId]
     );
     const teacherIds = [...new Set(reports.map(r => r.teacherId).filter(Boolean))];
-    const teachers = teacherIds.length ? await query(`SELECT id, firstName, lastName FROM \`User\` WHERE id IN (${teacherIds.map(() => '?').join(',')})`, teacherIds) : [];
+    const teachers = teacherIds.length ? await query(`SELECT id, firstName, lastName FROM \`user\` WHERE id IN (${teacherIds.map(() => '?').join(',')})`, teacherIds) : [];
     const tMap = Object.fromEntries(teachers.map(t => [t.id, t]));
     res.json(reports.map(r => ({ ...r, teacher: tMap[r.teacherId] || null })));
   } catch (err) {
