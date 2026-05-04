@@ -5,7 +5,7 @@ import api from '../../api/api';
 import {
   FaBook, FaUsers, FaHeart, FaChild, FaComments, FaBrain,
   FaCalendarAlt, FaSmile, FaMoon, FaUtensils, FaExclamationTriangle,
-  FaCheckCircle, FaStar, FaLightbulb, FaArrowRight, FaChevronLeft,
+  FaCheckCircle, FaStar, FaLightbulb, FaArrowRight,
 } from 'react-icons/fa';
 
 const MONTHS = [
@@ -78,7 +78,6 @@ const DevelopmentReport = () => {
   const [detail, setDetail]             = useState(null);
   const [listLoading, setListLoading]   = useState(true);
   const [detailLoading, setDetailLoad]  = useState(false);
-  const [showList, setShowList]         = useState(true); // mobile toggle
 
   // Load report list
   useEffect(() => {

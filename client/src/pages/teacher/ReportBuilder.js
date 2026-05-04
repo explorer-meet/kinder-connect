@@ -5,7 +5,7 @@ import {
   FaArrowLeft, FaPlus, FaTimes, FaSave, FaPaperPlane, FaChartBar,
   FaUsers, FaHeart, FaChild, FaComments, FaBrain,
   FaSmile, FaMoon, FaUtensils, FaExclamationTriangle,
-  FaCheckCircle, FaCalendarAlt, FaStar, FaLightbulb, FaSync,
+  FaCheckCircle, FaCalendarAlt, FaStar, FaSync,
 } from 'react-icons/fa';
 
 const MONTHS = [
