@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { randomUUID } = require('crypto');
 const { auth, authorize } = require('../middleware/auth');
 const { query, queryOne, newId, parseJ, toJ } = require('../src/lib/db');
@@ -64,14 +64,14 @@ router.post('/', auth, authorize(['teacher']), async (req, res) => {
     }
     let selectedStudentId = null;
     if (studentId) {
-      const student = await queryOne('SELECT id FROM Student WHERE id = ? AND batchId = ? LIMIT 1', [studentId, batchId]);
+      const student = await queryOne('SELECT id FROM student WHERE id = ? AND batchId = ? LIMIT 1', [studentId, batchId]);
       if (!student) return res.status(400).json({ error: 'Student is not assigned to selected batch' });
       selectedStudentId = student.id;
     }
     const id = newId();
     const foodItems = parseFoodItems(d.foodItems);
     await query(
-      `INSERT INTO ActivityLog (id, studentId, batchId, teacherId, activityType, napStartTime, napEndTime, napDuration, mealType, foodItems, intakeLevel, pottyType, time, notes, moodAtArrival, moodAtDeparture, moodNotes, mediaUrl, mediaType, caption, milestoneAchieved, domain, description, createdAt, updatedAt)
+      `INSERT INTO activitylog (id, studentId, batchId, teacherId, activityType, napStartTime, napEndTime, napDuration, mealType, foodItems, intakeLevel, pottyType, time, notes, moodAtArrival, moodAtDeparture, moodNotes, mediaUrl, mediaType, caption, milestoneAchieved, domain, description, createdAt, updatedAt)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
       [
         id,
@@ -89,7 +89,7 @@ router.post('/', auth, authorize(['teacher']), async (req, res) => {
         d.milestoneAchieved || null, d.domain || null, d.description || null,
       ]
     );
-    const activity = await queryOne('SELECT * FROM ActivityLog WHERE id = ?', [id]);
+    const activity = await queryOne('SELECT * FROM activitylog WHERE id = ?', [id]);
     res.status(201).json({ message: 'Activity logged', activity });
   } catch (err) {
     console.error('Log activity error:', err);
@@ -99,10 +99,10 @@ router.post('/', auth, authorize(['teacher']), async (req, res) => {
 
 router.get('/student/:studentId', auth, async (req, res) => {
   try {
-    const student = await queryOne('SELECT id, batchId FROM Student WHERE id = ? LIMIT 1', [req.params.studentId]);
+    const student = await queryOne('SELECT id, batchId FROM student WHERE id = ? LIMIT 1', [req.params.studentId]);
     if (!student) return res.status(404).json({ error: 'Student not found' });
     const activities = await query(
-      `SELECT * FROM ActivityLog WHERE (studentId = ? AND activityType = 'respective') OR (batchId = ? AND activityType IN ('general','class_note')) ORDER BY createdAt DESC LIMIT 100`,
+      `SELECT * FROM activitylog WHERE (studentId = ? AND activityType = 'respective') OR (batchId = ? AND activityType IN ('general','class_note')) ORDER BY createdAt DESC LIMIT 100`,
       [req.params.studentId, student.batchId]
     );
     res.json(await Promise.all(activities.map(fmtActivity)));
@@ -114,7 +114,7 @@ router.get('/batch/:batchId/date/:date', auth, async (req, res) => {
     const startDate = new Date(req.params.date); startDate.setHours(0, 0, 0, 0);
     const endDate = new Date(startDate); endDate.setDate(endDate.getDate() + 1);
     const activities = await query(
-      'SELECT * FROM ActivityLog WHERE batchId = ? AND createdAt >= ? AND createdAt < ? ORDER BY createdAt DESC',
+      'SELECT * FROM activitylog WHERE batchId = ? AND createdAt >= ? AND createdAt < ? ORDER BY createdAt DESC',
       [req.params.batchId, startDate, endDate]
     );
     res.json(await Promise.all(activities.map(fmtActivity)));
@@ -125,7 +125,7 @@ router.get('/batch/:batchId/recent', auth, async (req, res) => {
   try {
     const take = Math.min(parseInt(req.query.take || '30'), 100);
     const activities = await query(
-      'SELECT * FROM ActivityLog WHERE batchId = ? ORDER BY createdAt DESC LIMIT ?',
+      'SELECT * FROM activitylog WHERE batchId = ? ORDER BY createdAt DESC LIMIT ?',
       [req.params.batchId, take]
     );
     res.json(await Promise.all(activities.map(fmtActivity)));
@@ -135,7 +135,7 @@ router.get('/batch/:batchId/recent', auth, async (req, res) => {
 router.get('/student/:studentId/type/:activityType', auth, async (req, res) => {
   try {
     const activities = await query(
-      'SELECT * FROM ActivityLog WHERE studentId = ? AND activityType = ? ORDER BY createdAt DESC LIMIT 50',
+      'SELECT * FROM activitylog WHERE studentId = ? AND activityType = ? ORDER BY createdAt DESC LIMIT 50',
       [req.params.studentId, req.params.activityType]
     );
     res.json(await Promise.all(activities.map(fmtActivity)));

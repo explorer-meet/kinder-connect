@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { auth, authorize } = require('../middleware/auth');
 const { pool, query, queryOne, newId } = require('../src/lib/db');
 const bcrypt = require('bcryptjs');
@@ -17,8 +17,8 @@ router.get('/school-requests', auth, authorize(['super_admin']), async (req, res
   try {
     const statusFilter = req.query.status;
     const rows = statusFilter
-      ? await query('SELECT * FROM SchoolRegistrationRequest WHERE status = ? ORDER BY createdAt DESC', [statusFilter])
-      : await query('SELECT * FROM SchoolRegistrationRequest ORDER BY createdAt DESC');
+      ? await query('SELECT * FROM schoolregistrationrequest WHERE status = ? ORDER BY createdAt DESC', [statusFilter])
+      : await query('SELECT * FROM schoolregistrationrequest ORDER BY createdAt DESC');
     res.json(rows);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -30,12 +30,12 @@ router.post('/school-request/:requestId/approve', auth, authorize(['super_admin'
     const { adminFirstName, adminLastName, adminEmail, adminPassword, reviewNotes } = req.body;
     if (!adminFirstName || !adminLastName || !adminEmail) return res.status(400).json({ error: 'Admin first name, last name, and email are required' });
 
-    const request = await queryOne('SELECT * FROM SchoolRegistrationRequest WHERE id = ? LIMIT 1', [requestId]);
+    const request = await queryOne('SELECT * FROM schoolregistrationrequest WHERE id = ? LIMIT 1', [requestId]);
     if (!request) return res.status(404).json({ error: 'Request not found' });
     if (request.status !== 'pending') return res.status(400).json({ error: 'Only pending requests can be approved' });
 
     const normalizedAdminEmail = adminEmail.toLowerCase().trim();
-    const existingAdmin = await queryOne('SELECT id FROM `User` WHERE email = ? LIMIT 1', [normalizedAdminEmail]);
+    const existingAdmin = await queryOne('SELECT id FROM `user` WHERE email = ? LIMIT 1', [normalizedAdminEmail]);
     if (existingAdmin) return res.status(400).json({ error: 'Admin email is already in use' });
 
     const plainPassword = adminPassword?.trim().length >= 6 ? adminPassword.trim() : genTempPassword();
@@ -47,23 +47,23 @@ router.post('/school-request/:requestId/approve', auth, authorize(['super_admin'
     try {
       const schoolId = newId();
       await conn.execute(
-        'INSERT INTO School (id, name, description, address, city, phone, email, website, createdBy, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
+        'INSERT INTO school (id, name, description, address, city, phone, email, website, createdBy, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
         [schoolId, request.schoolName, request.notes || '', request.address || '', request.city || '', request.contactPhone || '', request.contactEmail, request.website || '', req.userId]
       );
       const adminId = newId();
       await conn.execute(
-        "INSERT INTO `User` (id, firstName, lastName, email, phone, password, role, schoolId, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, 'school_admin', ?, 1, NOW(), NOW())",
+        "INSERT INTO `user` (id, firstName, lastName, email, phone, password, role, schoolId, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, 'school_admin', ?, 1, NOW(), NOW())",
         [adminId, adminFirstName.trim(), adminLastName.trim(), normalizedAdminEmail, request.contactPhone || '', hashedPassword, schoolId]
       );
-      await conn.execute('UPDATE School SET schoolAdminId = ? WHERE id = ?', [adminId, schoolId]);
+      await conn.execute('UPDATE school SET schoolAdminId = ? WHERE id = ?', [adminId, schoolId]);
       await conn.execute(
-        'UPDATE SchoolRegistrationRequest SET status = ?, reviewedBy = ?, reviewedAt = NOW(), reviewNotes = ?, approvedSchoolId = ?, updatedAt = NOW() WHERE id = ?',
+        'UPDATE schoolregistrationrequest SET status = ?, reviewedBy = ?, reviewedAt = NOW(), reviewNotes = ?, approvedSchoolId = ?, updatedAt = NOW() WHERE id = ?',
         ['approved', req.userId, reviewNotes || null, schoolId, requestId]
       );
       await conn.commit();
       conn.release();
-      school = await queryOne('SELECT * FROM School WHERE id = ?', [schoolId]);
-      schoolAdmin = await queryOne('SELECT id, firstName, lastName, email FROM `User` WHERE id = ?', [adminId]);
+      school = await queryOne('SELECT * FROM school WHERE id = ?', [schoolId]);
+      schoolAdmin = await queryOne('SELECT id, firstName, lastName, email FROM `user` WHERE id = ?', [adminId]);
     } catch (e) {
       await conn.rollback(); conn.release(); throw e;
     }
@@ -86,13 +86,13 @@ router.patch('/school-request/:requestId/reject', auth, authorize(['super_admin'
   try {
     const { requestId } = req.params;
     const { reviewNotes } = req.body;
-    const request = await queryOne('SELECT * FROM SchoolRegistrationRequest WHERE id = ? LIMIT 1', [requestId]);
+    const request = await queryOne('SELECT * FROM schoolregistrationrequest WHERE id = ? LIMIT 1', [requestId]);
     if (!request) return res.status(404).json({ error: 'Request not found' });
     if (request.status !== 'pending') return res.status(400).json({ error: 'Only pending requests can be rejected' });
-    await query('UPDATE SchoolRegistrationRequest SET status = ?, reviewedBy = ?, reviewedAt = NOW(), reviewNotes = ?, updatedAt = NOW() WHERE id = ?',
+    await query('UPDATE schoolregistrationrequest SET status = ?, reviewedBy = ?, reviewedAt = NOW(), reviewNotes = ?, updatedAt = NOW() WHERE id = ?',
       ['rejected', req.userId, reviewNotes || null, requestId]);
     await sendMailSafe({ to: request.contactEmail, subject: 'School registration update - Kinder Connect', text: `Your school registration request was rejected.${reviewNotes ? '\nReason: ' + reviewNotes : ''}` });
-    const updated = await queryOne('SELECT * FROM SchoolRegistrationRequest WHERE id = ?', [requestId]);
+    const updated = await queryOne('SELECT * FROM schoolregistrationrequest WHERE id = ?', [requestId]);
     res.json({ message: 'Request rejected', request: updated });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -100,7 +100,7 @@ router.patch('/school-request/:requestId/reject', auth, authorize(['super_admin'
 // Get all schools
 router.get('/schools', auth, authorize(['super_admin']), async (req, res) => {
   try {
-    const schools = await query('SELECT * FROM School ORDER BY createdAt DESC');
+    const schools = await query('SELECT * FROM school ORDER BY createdAt DESC');
     res.json(schools);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -112,21 +112,21 @@ router.post('/school', auth, authorize(['super_admin']), async (req, res) => {
     if (!name) return res.status(400).json({ error: 'School name is required' });
 
     const schoolId = newId();
-    await query('INSERT INTO School (id, name, description, address, city, phone, email, website, createdBy, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
+    await query('INSERT INTO school (id, name, description, address, city, phone, email, website, createdBy, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
       [schoolId, name, description || '', address || '', city || '', phone || '', email || '', website || '', req.userId]);
 
     if (schoolAdminEmail && schoolAdminPassword) {
       const hashedPassword = await bcrypt.hash(schoolAdminPassword, 10);
       const adminId = newId();
-      await query("INSERT INTO `User` (id, firstName, lastName, email, phone, password, role, schoolId, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, 'school_admin', ?, 1, NOW(), NOW())",
+      await query("INSERT INTO `user` (id, firstName, lastName, email, phone, password, role, schoolId, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, 'school_admin', ?, 1, NOW(), NOW())",
         [adminId, schoolAdminFirstName || 'School', schoolAdminLastName || 'Admin', schoolAdminEmail, phone || '', hashedPassword, schoolId]);
-      await query('UPDATE School SET schoolAdminId = ? WHERE id = ?', [adminId, schoolId]);
+      await query('UPDATE school SET schoolAdminId = ? WHERE id = ?', [adminId, schoolId]);
       const token = jwt.sign({ userId: adminId, role: 'school_admin' }, process.env.JWT_SECRET || 'your_secret_key', { expiresIn: '7d' });
-      const school = await queryOne('SELECT * FROM School WHERE id = ?', [schoolId]);
+      const school = await queryOne('SELECT * FROM school WHERE id = ?', [schoolId]);
       return res.status(201).json({ message: 'School and admin account created successfully', school: { ...school, admin: { id: adminId, email: schoolAdminEmail, token } } });
     }
 
-    const school = await queryOne('SELECT * FROM School WHERE id = ?', [schoolId]);
+    const school = await queryOne('SELECT * FROM school WHERE id = ?', [schoolId]);
     res.status(201).json({ message: 'School created successfully', school });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -134,7 +134,7 @@ router.post('/school', auth, authorize(['super_admin']), async (req, res) => {
 // Get school details
 router.get('/school/:schoolId', auth, authorize(['super_admin', 'school_admin']), async (req, res) => {
   try {
-    const school = await queryOne('SELECT * FROM School WHERE id = ? LIMIT 1', [req.params.schoolId]);
+    const school = await queryOne('SELECT * FROM school WHERE id = ? LIMIT 1', [req.params.schoolId]);
     if (!school) return res.status(404).json({ error: 'School not found' });
     res.json(school);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -155,8 +155,8 @@ router.put('/school/:schoolId', auth, authorize(['super_admin', 'school_admin'])
     if (isActive !== undefined)    { sets.push('isActive = ?');    vals.push(isActive ? 1 : 0); }
     sets.push('updatedAt = NOW()');
     vals.push(req.params.schoolId);
-    await query(`UPDATE School SET ${sets.join(', ')} WHERE id = ?`, vals);
-    const school = await queryOne('SELECT * FROM School WHERE id = ?', [req.params.schoolId]);
+    await query(`UPDATE school SET ${sets.join(', ')} WHERE id = ?`, vals);
+    const school = await queryOne('SELECT * FROM school WHERE id = ?', [req.params.schoolId]);
     res.json({ message: 'School updated successfully', school });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -164,14 +164,14 @@ router.put('/school/:schoolId', auth, authorize(['super_admin', 'school_admin'])
 // Deactivate / Activate school
 router.patch('/school/:schoolId/deactivate', auth, authorize(['super_admin']), async (req, res) => {
   try {
-    await query('UPDATE School SET isActive = 0, updatedAt = NOW() WHERE id = ?', [req.params.schoolId]);
+    await query('UPDATE school SET isActive = 0, updatedAt = NOW() WHERE id = ?', [req.params.schoolId]);
     res.json({ message: 'School deactivated successfully' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 router.patch('/school/:schoolId/activate', auth, authorize(['super_admin']), async (req, res) => {
   try {
-    await query('UPDATE School SET isActive = 1, updatedAt = NOW() WHERE id = ?', [req.params.schoolId]);
+    await query('UPDATE school SET isActive = 1, updatedAt = NOW() WHERE id = ?', [req.params.schoolId]);
     res.json({ message: 'School activated successfully' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -179,8 +179,8 @@ router.patch('/school/:schoolId/activate', auth, authorize(['super_admin']), asy
 // Delete school
 router.delete('/school/:schoolId', auth, authorize(['super_admin']), async (req, res) => {
   try {
-    await query('DELETE FROM `User` WHERE schoolId = ?', [req.params.schoolId]);
-    await query('DELETE FROM School WHERE id = ?', [req.params.schoolId]);
+    await query('DELETE FROM `user` WHERE schoolId = ?', [req.params.schoolId]);
+    await query('DELETE FROM school WHERE id = ?', [req.params.schoolId]);
     res.json({ message: 'School deleted successfully' });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -189,12 +189,12 @@ router.delete('/school/:schoolId', auth, authorize(['super_admin']), async (req,
 router.get('/stats', auth, authorize(['super_admin']), async (req, res) => {
   try {
     const [schools, active, pending, students, users, classes] = await Promise.all([
-      queryOne('SELECT COUNT(*) AS cnt FROM School'),
-      queryOne('SELECT COUNT(*) AS cnt FROM School WHERE isActive = 1'),
-      queryOne("SELECT COUNT(*) AS cnt FROM SchoolRegistrationRequest WHERE status = 'pending'"),
-      queryOne('SELECT COUNT(*) AS cnt FROM Student'),
-      queryOne('SELECT COUNT(*) AS cnt FROM `User`'),
-      queryOne('SELECT COUNT(*) AS cnt FROM `Class`'),
+      queryOne('SELECT COUNT(*) AS cnt FROM school'),
+      queryOne('SELECT COUNT(*) AS cnt FROM school WHERE isActive = 1'),
+      queryOne("SELECT COUNT(*) AS cnt FROM schoolregistrationrequest WHERE status = 'pending'"),
+      queryOne('SELECT COUNT(*) AS cnt FROM student'),
+      queryOne('SELECT COUNT(*) AS cnt FROM `user`'),
+      queryOne('SELECT COUNT(*) AS cnt FROM `class`'),
     ]);
     res.json({ totalSchools: schools.cnt, activeSchools: active.cnt, pendingRequests: pending.cnt, totalStudents: students.cnt, totalUsers: users.cnt, totalClasses: classes.cnt });
   } catch (err) { res.status(500).json({ error: err.message }); }

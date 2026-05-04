@@ -16,14 +16,14 @@ router.post('/school-registration-request', async (req, res) => {
     }
     const normalizedEmail = contactEmail.toLowerCase().trim();
     const existing = await queryOne(
-      "SELECT id FROM SchoolRegistrationRequest WHERE contactEmail = ? AND status = 'pending' LIMIT 1",
+      "SELECT id FROM schoolregistrationrequest WHERE contactEmail = ? AND status = 'pending' LIMIT 1",
       [normalizedEmail]
     );
     if (existing) return res.status(400).json({ error: 'A pending request already exists for this email' });
 
     const id = newId();
     await query(
-      'INSERT INTO SchoolRegistrationRequest (id, schoolName, contactFirstName, contactLastName, contactEmail, contactPhone, city, address, website, notes, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
+      'INSERT INTO schoolregistrationrequest (id, schoolName, contactFirstName, contactLastName, contactEmail, contactPhone, city, address, website, notes, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
       [id, schoolName.trim(), contactFirstName.trim(), contactLastName.trim(), normalizedEmail, contactPhone || null, city || null, address || null, website || null, notes || null, 'pending']
     );
 
@@ -51,7 +51,7 @@ router.post('/login', async (req, res) => {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password required' });
 
-    const user = await queryOne('SELECT * FROM `User` WHERE email = ? LIMIT 1', [email.toLowerCase()]);
+    const user = await queryOne('SELECT * FROM `user` WHERE email = ? LIMIT 1', [email.toLowerCase()]);
     if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
     const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -77,7 +77,7 @@ router.post('/login', async (req, res) => {
 router.get('/me', auth, async (req, res) => {
   try {
     const user = await queryOne(
-      'SELECT id, firstName, lastName, email, role, schoolId FROM `User` WHERE id = ? LIMIT 1',
+      'SELECT id, firstName, lastName, email, role, schoolId FROM `user` WHERE id = ? LIMIT 1',
       [req.userId]
     );
     if (!user) return res.status(404).json({ error: 'User not found' });

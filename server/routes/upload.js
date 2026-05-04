@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
@@ -46,7 +46,7 @@ const uploadMemory = multer({
   },
 });
 
-// POST /api/upload/photo  — uploads an image to S3 and returns the public URL
+// POST /api/upload/photo  â€” uploads an image to S3 and returns the public URL
 router.post('/photo', auth, uploadMemory.single('file'), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });

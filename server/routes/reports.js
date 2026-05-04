@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { auth, authorize } = require('../middleware/auth');
 const { query, queryOne, newId, parseJ, toJ } = require('../src/lib/db');
 
@@ -9,10 +9,10 @@ async function computeStats(studentId, batchId, month, year) {
   const endDate   = new Date(year, month, 1);
 
   const [attendanceRecords, activityLogs, milestones, incidents] = await Promise.all([
-    query('SELECT * FROM Attendance WHERE studentId = ? AND batchId = ? AND date >= ? AND date < ?', [studentId, batchId, startDate, endDate]),
-    query('SELECT * FROM ActivityLog WHERE studentId = ? AND date >= ? AND date < ?', [studentId, startDate, endDate]),
-    query('SELECT * FROM Milestone WHERE studentId = ? AND month = ? AND year = ?', [studentId, month, year]),
-    query('SELECT id, incidentType, severity, incidentTime, description FROM IncidentReport WHERE studentId = ? AND incidentTime >= ? AND incidentTime < ?', [studentId, startDate, endDate]),
+    query('SELECT * FROM attendance WHERE studentId = ? AND batchId = ? AND date >= ? AND date < ?', [studentId, batchId, startDate, endDate]),
+    query('SELECT * FROM activitylog WHERE studentId = ? AND date >= ? AND date < ?', [studentId, startDate, endDate]),
+    query('SELECT * FROM milestone WHERE studentId = ? AND month = ? AND year = ?', [studentId, month, year]),
+    query('SELECT id, incidentType, severity, incidentTime, description FROM incidentreport WHERE studentId = ? AND incidentTime >= ? AND incidentTime < ?', [studentId, startDate, endDate]),
   ]);
 
   const totalDays    = attendanceRecords.length;
@@ -52,10 +52,10 @@ router.post('/generate', auth, authorize(['teacher']), async (req, res) => {
     const { studentId, batchId, month, year } = req.body;
     if (!studentId || !batchId || !month || !year) return res.status(400).json({ error: 'studentId, batchId, month, year are required' });
 
-    const teacher = await queryOne('SELECT schoolId FROM `User` WHERE id = ? LIMIT 1', [req.userId]);
+    const teacher = await queryOne('SELECT schoolId FROM `user` WHERE id = ? LIMIT 1', [req.userId]);
     if (!teacher?.schoolId) return res.status(403).json({ error: 'Teacher not linked to a school' });
 
-    const student = await queryOne('SELECT id, firstName, lastName, photo FROM Student WHERE id = ? AND schoolId = ? LIMIT 1', [studentId, teacher.schoolId]);
+    const student = await queryOne('SELECT id, firstName, lastName, photo FROM student WHERE id = ? AND schoolId = ? LIMIT 1', [studentId, teacher.schoolId]);
     if (!student) return res.status(404).json({ error: 'Student not found' });
 
     const iMonth = parseInt(month), iYear = parseInt(year);
@@ -70,20 +70,20 @@ router.post('/generate', auth, authorize(['teacher']), async (req, res) => {
 
     const defaultDomains = DOMAINS.map(d => ({ domain: d, rating: 'developing', notes: '', milestones: milestonesByDomain[d] || [] }));
 
-    let report = await queryOne('SELECT * FROM Report WHERE studentId = ? AND batchId = ? AND month = ? AND year = ? LIMIT 1', [studentId, batchId, iMonth, iYear]);
+    let report = await queryOne('SELECT * FROM report WHERE studentId = ? AND batchId = ? AND month = ? AND year = ? LIMIT 1', [studentId, batchId, iMonth, iYear]);
 
     if (report) {
       const existing = parseJ(report.domains) || defaultDomains;
       const merged   = existing.map(d => ({ ...d, milestones: milestonesByDomain[d.domain] || d.milestones || [] }));
-      await query('UPDATE Report SET domains = ?, updatedAt = NOW() WHERE id = ?', [JSON.stringify(merged), report.id]);
-      report = await queryOne('SELECT * FROM Report WHERE id = ?', [report.id]);
+      await query('UPDATE report SET domains = ?, updatedAt = NOW() WHERE id = ?', [JSON.stringify(merged), report.id]);
+      report = await queryOne('SELECT * FROM report WHERE id = ?', [report.id]);
     } else {
       const id = newId();
       await query(
-        'INSERT INTO Report (id, studentId, batchId, teacherId, month, year, domains, highlights, areasForImprovement, recommendedActivities, reportStatus, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
+        'INSERT INTO report (id, studentId, batchId, teacherId, month, year, domains, highlights, areasForImprovement, recommendedActivities, reportStatus, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())',
         [id, studentId, batchId, req.userId, iMonth, iYear, JSON.stringify(defaultDomains), JSON.stringify([]), JSON.stringify([]), JSON.stringify([]), 'draft']
       );
-      report = await queryOne('SELECT * FROM Report WHERE id = ?', [id]);
+      report = await queryOne('SELECT * FROM report WHERE id = ?', [id]);
     }
 
     if (report) {
@@ -105,16 +105,16 @@ router.get('/batch/:batchId', auth, authorize(['teacher']), async (req, res) => 
     const month = parseInt(req.query.month), year = parseInt(req.query.year);
     if (!month || !year) return res.status(400).json({ error: 'month and year are required' });
 
-    const teacher = await queryOne('SELECT schoolId FROM `User` WHERE id = ? LIMIT 1', [req.userId]);
+    const teacher = await queryOne('SELECT schoolId FROM `user` WHERE id = ? LIMIT 1', [req.userId]);
     if (!teacher?.schoolId) return res.status(403).json({ error: 'Teacher not linked to a school' });
 
     const students = await query(
-      'SELECT id, firstName, lastName, photo FROM Student WHERE batchId = ? AND schoolId = ? AND isActive = 1 ORDER BY firstName ASC',
+      'SELECT id, firstName, lastName, photo FROM student WHERE batchId = ? AND schoolId = ? AND isActive = 1 ORDER BY firstName ASC',
       [req.params.batchId, teacher.schoolId]
     );
 
     const reports = await query(
-      'SELECT id, studentId, reportStatus, updatedAt, sentToParentOn FROM Report WHERE batchId = ? AND month = ? AND year = ?',
+      'SELECT id, studentId, reportStatus, updatedAt, sentToParentOn FROM report WHERE batchId = ? AND month = ? AND year = ?',
       [req.params.batchId, month, year]
     );
     const reportMap = {};
@@ -130,7 +130,7 @@ router.get('/student/:studentId', auth, async (req, res) => {
   try {
     const whereStatus = req.userRole === 'parent' ? "AND reportStatus = 'sent_to_parent'" : '';
     const reports = await query(
-      `SELECT id, month, year, reportStatus, overallSummary, sentToParentOn, updatedAt, teacherId FROM Report WHERE studentId = ? ${whereStatus} ORDER BY year DESC, month DESC`,
+      `SELECT id, month, year, reportStatus, overallSummary, sentToParentOn, updatedAt, teacherId FROM report WHERE studentId = ? ${whereStatus} ORDER BY year DESC, month DESC`,
       [req.params.studentId]
     );
     const teacherIds = [...new Set(reports.map(r => r.teacherId).filter(Boolean))];
@@ -144,7 +144,7 @@ router.get('/student/:studentId', auth, async (req, res) => {
 
 router.get('/:reportId', auth, async (req, res) => {
   try {
-    const report = await queryOne('SELECT * FROM Report WHERE id = ? LIMIT 1', [req.params.reportId]);
+    const report = await queryOne('SELECT * FROM report WHERE id = ? LIMIT 1', [req.params.reportId]);
     if (!report) return res.status(404).json({ error: 'Report not found' });
     if (req.userRole === 'parent' && report.reportStatus !== 'sent_to_parent') return res.status(403).json({ error: 'Report not yet published' });
 
@@ -154,8 +154,8 @@ router.get('/:reportId', auth, async (req, res) => {
     report.recommendedActivities = parseJ(report.recommendedActivities);
 
     const [student, teacher, stats] = await Promise.all([
-      queryOne('SELECT id, firstName, lastName, photo, dateOfBirth FROM Student WHERE id = ? LIMIT 1', [report.studentId]),
-      queryOne('SELECT id, firstName, lastName, photo FROM `User` WHERE id = ? LIMIT 1', [report.teacherId]),
+      queryOne('SELECT id, firstName, lastName, photo, dateOfBirth FROM student WHERE id = ? LIMIT 1', [report.studentId]),
+      queryOne('SELECT id, firstName, lastName, photo FROM `user` WHERE id = ? LIMIT 1', [report.teacherId]),
       computeStats(report.studentId, report.batchId, report.month, report.year),
     ]);
     res.json({ report, student, teacher, stats });
@@ -167,7 +167,7 @@ router.get('/:reportId', auth, async (req, res) => {
 router.patch('/:reportId', auth, authorize(['teacher']), async (req, res) => {
   try {
     const { domains, overallSummary, highlights, areasForImprovement, recommendedActivities, reportStatus } = req.body;
-    const existing = await queryOne('SELECT id, teacherId FROM Report WHERE id = ? LIMIT 1', [req.params.reportId]);
+    const existing = await queryOne('SELECT id, teacherId FROM report WHERE id = ? LIMIT 1', [req.params.reportId]);
     if (!existing) return res.status(404).json({ error: 'Report not found' });
     if (existing.teacherId !== req.userId) return res.status(403).json({ error: 'Not authorized' });
 
@@ -181,8 +181,8 @@ router.patch('/:reportId', auth, authorize(['teacher']), async (req, res) => {
     sets.push('updatedAt = NOW()');
     vals.push(req.params.reportId);
 
-    await query(`UPDATE Report SET ${sets.join(', ')} WHERE id = ?`, vals);
-    const report = await queryOne('SELECT * FROM Report WHERE id = ?', [req.params.reportId]);
+    await query(`UPDATE report SET ${sets.join(', ')} WHERE id = ?`, vals);
+    const report = await queryOne('SELECT * FROM report WHERE id = ?', [req.params.reportId]);
     if (report) {
       report.domains = parseJ(report.domains);
       report.highlights = parseJ(report.highlights);
@@ -197,11 +197,11 @@ router.patch('/:reportId', auth, authorize(['teacher']), async (req, res) => {
 
 router.post('/:reportId/send', auth, authorize(['teacher']), async (req, res) => {
   try {
-    const existing = await queryOne('SELECT id, teacherId FROM Report WHERE id = ? LIMIT 1', [req.params.reportId]);
+    const existing = await queryOne('SELECT id, teacherId FROM report WHERE id = ? LIMIT 1', [req.params.reportId]);
     if (!existing) return res.status(404).json({ error: 'Report not found' });
     if (existing.teacherId !== req.userId) return res.status(403).json({ error: 'Not authorized' });
-    await query("UPDATE Report SET reportStatus = 'sent_to_parent', sentToParentOn = NOW(), updatedAt = NOW() WHERE id = ?", [req.params.reportId]);
-    const report = await queryOne('SELECT * FROM Report WHERE id = ?', [req.params.reportId]);
+    await query("UPDATE report SET reportStatus = 'sent_to_parent', sentToParentOn = NOW(), updatedAt = NOW() WHERE id = ?", [req.params.reportId]);
+    const report = await queryOne('SELECT * FROM report WHERE id = ?', [req.params.reportId]);
     if (report) {
       report.domains = parseJ(report.domains);
       report.highlights = parseJ(report.highlights);
