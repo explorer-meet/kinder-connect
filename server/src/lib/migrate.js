@@ -111,6 +111,23 @@ const createTables = async () => {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   `);
 
+  // Parent web push subscriptions
+  await query(`
+    CREATE TABLE IF NOT EXISTS pushsubscription (
+      id            VARCHAR(64)   NOT NULL PRIMARY KEY,
+      userId        VARCHAR(64)   NOT NULL,
+      endpoint      TEXT          NOT NULL,
+      endpointHash  CHAR(64)      NOT NULL,
+      p256dh        VARCHAR(255)  NOT NULL,
+      auth          VARCHAR(255)  NOT NULL,
+      userAgent     VARCHAR(500)  DEFAULT '',
+      createdAt     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_push_endpoint_hash (endpointHash),
+      KEY idx_push_user (userId)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
   console.log('DB tables verified/created');
 };
 

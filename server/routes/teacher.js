@@ -2,6 +2,7 @@
 const bcrypt = require('bcryptjs');
 const { auth, authorize } = require('../middleware/auth');
 const { pool, query, queryOne, newId, parseJ, toJ } = require('../src/lib/db');
+const { notifyParentsForActivity } = require('../src/lib/push');
 
 const router = express.Router();
 
@@ -209,6 +210,11 @@ router.post('/activity', auth, authorize(['teacher']), async (req, res) => {
       [id, studentId || null, batchId, req.userId, activityType, napStartTime ? new Date(napStartTime) : null, napEndTime ? new Date(napEndTime) : null, napDuration ? parseInt(napDuration) : null, mealType || null, foodItems ? JSON.stringify(Array.isArray(foodItems) ? foodItems : [foodItems]) : null, intakeLevel || null, pottyType || null, time ? new Date(time) : null, notes || null, moodAtArrival || null, moodAtDeparture || null, moodNotes || null, mediaUrl || null, mediaType || null, caption || null, milestoneAchieved || null, domain || null, description || null]
     );
     const activity = await queryOne('SELECT * FROM activitylog WHERE id = ?', [id]);
+
+    await notifyParentsForActivity(activity).catch((notifyErr) => {
+      console.error('Push notification send failed for activity:', id, notifyErr.message);
+    });
+
     res.status(201).json({ message: 'Activity logged', activity });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

@@ -3,6 +3,7 @@ const { randomUUID } = require('crypto');
 const { auth, authorize } = require('../middleware/auth');
 const { query, queryOne, newId, parseJ, toJ } = require('../src/lib/db');
 const { uploadBufferToS3, resolveStoredS3Url } = require('../src/lib/s3');
+const { notifyParentsForActivity } = require('../src/lib/push');
 
 const router = express.Router();
 
@@ -90,6 +91,12 @@ router.post('/', auth, authorize(['teacher']), async (req, res) => {
       ]
     );
     const activity = await queryOne('SELECT * FROM activitylog WHERE id = ?', [id]);
+
+    // Notification send should not block activity logging success response.
+    await notifyParentsForActivity(activity).catch((notifyErr) => {
+      console.error('Push notification send failed for activity:', id, notifyErr.message);
+    });
+
     res.status(201).json({ message: 'Activity logged', activity });
   } catch (err) {
     console.error('Log activity error:', err);

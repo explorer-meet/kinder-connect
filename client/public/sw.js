@@ -4,8 +4,7 @@ const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon-192.png',
-  '/icon-512.png',
+  '/icon-192.svg',
 ];
 
 // Install: cache static shell
@@ -57,6 +56,52 @@ self.addEventListener('fetch', (event) => {
           return response;
         })
         .catch(() => caches.match('/index.html'));
+    })
+  );
+});
+
+self.addEventListener('push', (event) => {
+  const fallback = {
+    title: 'KinderConnect',
+    body: 'You have a new update.',
+    icon: '/icon-192.svg',
+    badge: '/icon-192.svg',
+    data: { url: '/parent/dashboard' },
+  };
+
+  let payload = fallback;
+  try {
+    if (event.data) {
+      payload = { ...fallback, ...event.data.json() };
+    }
+  } catch (_err) {
+    payload = fallback;
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: payload.icon,
+      badge: payload.badge,
+      data: payload.data,
+      tag: payload.tag,
+      renotify: true,
+    })
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const targetUrl = event.notification?.data?.url || '/parent/dashboard';
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      const existing = windowClients.find((client) => client.url.includes('/parent'));
+      if (existing) {
+        existing.focus();
+        return existing.navigate(targetUrl);
+      }
+      return clients.openWindow(targetUrl);
     })
   );
 });

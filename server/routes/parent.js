@@ -1,6 +1,7 @@
 ﻿const express = require('express');
 const { auth, authorize } = require('../middleware/auth');
 const { query, queryOne, newId, parseJ, toJ } = require('../src/lib/db');
+const { getPublicVapidKey, upsertPushSubscription, removePushSubscription } = require('../src/lib/push');
 
 const router = express.Router();
 
@@ -468,6 +469,51 @@ router.put('/child/:studentId/transportation', auth, authorize(['parent']), asyn
     res.json({ success: true, student: updated });
   } catch (err) {
     console.error('PUT /parent/child/:studentId/transportation error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /parent/push/public-key
+router.get('/push/public-key', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const publicKey = getPublicVapidKey();
+    res.json({ publicKey });
+  } catch (err) {
+    res.status(503).json({ error: err.message || 'Push notification is not configured' });
+  }
+});
+
+// POST /parent/push/subscribe
+router.post('/push/subscribe', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const { subscription } = req.body;
+    if (!subscription?.endpoint || !subscription?.keys?.p256dh || !subscription?.keys?.auth) {
+      return res.status(400).json({ error: 'Valid subscription payload is required' });
+    }
+
+    const id = await upsertPushSubscription({
+      userId: req.userId,
+      subscription,
+      userAgent: req.headers['user-agent'] || '',
+    });
+
+    res.status(201).json({ success: true, id });
+  } catch (err) {
+    console.error('POST /parent/push/subscribe error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /parent/push/subscribe
+router.delete('/push/subscribe', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const endpoint = req.body?.endpoint || req.body?.subscription?.endpoint;
+    if (!endpoint) return res.status(400).json({ error: 'endpoint is required' });
+
+    const removed = await removePushSubscription({ userId: req.userId, endpoint });
+    res.json({ success: true, removed });
+  } catch (err) {
+    console.error('DELETE /parent/push/subscribe error:', err);
     res.status(500).json({ error: err.message });
   }
 });

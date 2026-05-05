@@ -2,6 +2,7 @@ import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import api from '../../api/api';
 import useAuthStore from '../../store/authStore';
+import { registerParentPushNotifications } from '../../lib/pushNotifications';
 import {
   FaCamera, FaBook, FaClipboardList, FaCalendarAlt,
   FaArrowRight, FaShuttleVan, FaPlus, FaTimes, FaCheck, FaBan,
@@ -181,6 +182,7 @@ export default function ParentDashboard() {
   const childPhotoInputRef = useRef(null);
   const [photoUploadChildId, setPhotoUploadChildId] = useState('');
   const [uploadingChildPhotoId, setUploadingChildPhotoId] = useState('');
+  const pushInitRef = useRef(false);
 
   const [ptmSlots, setPtmSlots] = useState([]);
   const [ptmRequests, setPtmRequests] = useState([]);
@@ -541,6 +543,15 @@ export default function ParentDashboard() {
   useEffect(() => {
     Promise.all([fetchChildren(), fetchCirculars(), fetchPickupRequests(), fetchFees()]);
   }, []);
+
+  useEffect(() => {
+    if (!user?.id || pushInitRef.current) return;
+    pushInitRef.current = true;
+
+    registerParentPushNotifications().catch((err) => {
+      console.warn('Push notification setup failed:', err?.message || err);
+    });
+  }, [user?.id]);
 
   useEffect(() => {
     if (loading || children.length === 0) return;
