@@ -3,9 +3,9 @@ import { useLocation } from 'react-router-dom';
 import api from '../../api/api';
 import useAuthStore from '../../store/authStore';
 import SchoolAdminPortalLayout from '../../components/SchoolAdminPortalLayout';
-import { FaUsers, FaUserPlus, FaGraduationCap, FaPlus, FaLayerGroup, FaChild, FaTrash, FaBullhorn, FaTimes, FaUpload, FaFilePdf, FaImage, FaCheck, FaBan, FaCamera, FaCalendarAlt, FaClock } from 'react-icons/fa';
+import { FaUsers, FaUserPlus, FaGraduationCap, FaPlus, FaLayerGroup, FaChild, FaTrash, FaBullhorn, FaTimes, FaUpload, FaFilePdf, FaImage, FaCheck, FaBan, FaCamera, FaCalendarAlt, FaClock, FaFileCsv, FaWhatsapp, FaMoneyBillWave, FaPalette, FaShieldAlt, FaHistory, FaBell } from 'react-icons/fa';
 
-const TABS = ['staff', 'classes', 'enrollment', 'circulars', 'ptmRequests', 'pickups'];
+const TABS = ['staff', 'classes', 'enrollment', 'circulars', 'ptmRequests', 'pickups', 'fees', 'branding', 'compliance'];
 
 const emptyEnrollmentForm = {
   classId: '',
@@ -60,6 +60,33 @@ export default function SchoolAdminDashboard() {
   const [uploadingStaffPhoto, setUploadingStaffPhoto] = useState(false);
   const [uploadingStudentPhoto, setUploadingStudentPhoto] = useState(false);
   const [uploadingStaffDoc, setUploadingStaffDoc] = useState(false);
+  const [csvBatchId, setCsvBatchId] = useState('');
+  const [csvText, setCsvText] = useState('');
+  const [csvImporting, setCsvImporting] = useState(false);
+  const [csvSummary, setCsvSummary] = useState(null);
+  const [showCsvWizard, setShowCsvWizard] = useState(false);
+
+  // Fee reminders
+  const [fees, setFees] = useState([]);
+  const [showFeeForm, setShowFeeForm] = useState(false);
+  const [feeForm, setFeeForm] = useState({ studentId: '', amount: '', dueDate: '', description: '' });
+  const [sendingReminder, setSendingReminder] = useState(null);
+
+  // Branding
+  const [branding, setBranding] = useState({ logoUrl: '', primaryColor: '#059669', secondaryColor: '#0d9488', tagline: '' });
+  const [brandingForm, setBrandingForm] = useState({ logoUrl: '', primaryColor: '#059669', secondaryColor: '#0d9488', tagline: '' });
+  const [savingBranding, setSavingBranding] = useState(false);
+  const [uploadingBrandingLogo, setUploadingBrandingLogo] = useState(false);
+  const brandingLogoInputRef = useRef(null);
+
+  // Compliance
+  const [auditLog, setAuditLog] = useState([]);
+  const [auditTotal, setAuditTotal] = useState(0);
+  const [auditOffset, setAuditOffset] = useState(0);
+  const [consents, setConsents] = useState([]);
+  const [showConsentForm, setShowConsentForm] = useState(false);
+  const [consentForm, setConsentForm] = useState({ parentId: '', studentId: '', consentType: '', consentText: '', accepted: false });
+  const [complianceView, setComplianceView] = useState('audit');
   const docInputRef = useRef(null);
   const staffPhotoInputRef = useRef(null);
   const studentPhotoInputRef = useRef(null);
@@ -81,6 +108,32 @@ export default function SchoolAdminDashboard() {
   const showMsg = (type, text) => {
     setMessage({ type, text });
     setTimeout(() => setMessage(null), 3500);
+  };
+
+  const openWhatsApp = (phone, text) => {
+    const normalized = String(phone || '').replace(/[^0-9]/g, '');
+    if (!normalized) {
+      showMsg('error', 'Parent phone not available for WhatsApp');
+      return;
+    }
+    window.open(`https://wa.me/${normalized}?text=${encodeURIComponent(text)}`, '_blank', 'noopener,noreferrer');
+  };
+
+  const parseCsv = (text) => {
+    const lines = String(text || '')
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length < 2) return [];
+
+    const split = (line) => line.split(',').map((cell) => cell.trim().replace(/^"|"$/g, ''));
+    const headers = split(lines[0]);
+    return lines.slice(1).map((line) => {
+      const values = split(line);
+      const row = {};
+      headers.forEach((h, idx) => { row[h] = values[idx] || ''; });
+      return row;
+    });
   };
 
   const loadSchool = async () => {
@@ -118,17 +171,49 @@ export default function SchoolAdminDashboard() {
     setPtmRequests(res.data || []);
   };
 
+  const loadFees = async () => {
+    const res = await api.get('/fees');
+    setFees(res.data || []);
+  };
+
+  const loadBranding = async () => {
+    const res = await api.get('/schooladmin/school/branding');
+    const b = res.data || {};
+    setBranding(b);
+    setBrandingForm({ logoUrl: b.logoUrl || '', primaryColor: b.primaryColor || '#059669', secondaryColor: b.secondaryColor || '#0d9488', tagline: b.tagline || '' });
+  };
+
+  const loadAuditLog = async (offset = 0) => {
+    const res = await api.get('/compliance/audit?limit=50&offset=' + offset);
+    if (offset === 0) {
+      setAuditLog(res.data.rows || []);
+    } else {
+      setAuditLog((prev) => [...prev, ...(res.data.rows || [])]);
+    }
+    setAuditTotal(res.data.total || 0);
+    setAuditOffset(offset);
+  };
+
+  const loadConsents = async () => {
+    const res = await api.get('/compliance/consents');
+    setConsents(res.data || []);
+  };
+
   useEffect(() => {
     if (user?.role !== 'school_admin') return;
     const fetchData = async () => {
       setLoading(true);
       try {
+        await loadBranding();
         if (activeTab === 'staff') await Promise.all([loadSchool(), loadStaff()]);
         if (activeTab === 'classes') await Promise.all([loadSchool(), loadClasses()]);
         if (activeTab === 'enrollment') await Promise.all([loadSchool(), loadClasses(), loadStudents()]);
         if (activeTab === 'circulars') await Promise.all([loadSchool(), loadCirculars()]);
         if (activeTab === 'ptmRequests') await Promise.all([loadSchool(), loadPtmRequests()]);
         if (activeTab === 'pickups') await Promise.all([loadSchool(), loadPickupRequests()]);
+        if (activeTab === 'fees') await Promise.all([loadSchool(), loadStudents(), loadFees()]);
+        if (activeTab === 'branding') await Promise.all([loadSchool()]);
+        if (activeTab === 'compliance') await Promise.all([loadSchool(), loadStudents(), loadAuditLog(0), loadConsents()]);
       } catch (err) {
         showMsg('error', err.response?.data?.error || 'Failed to load data');
       } finally {
@@ -149,6 +234,11 @@ export default function SchoolAdminDashboard() {
     setEnrollForm(emptyEnrollmentForm);
     setSelectedPtmRequestId(null);
     setPtmApprovalForm({ meetingDate: '', startTime: '', endTime: '', location: '', adminNotes: '' });
+    setShowFeeForm(false);
+    setFeeForm({ studentId: '', amount: '', dueDate: '', description: '' });
+    setShowConsentForm(false);
+    setConsentForm({ parentId: '', studentId: '', consentType: '', consentText: '', accepted: false });
+    setAuditOffset(0);
   }, [activeTab]);
 
   useEffect(() => {
@@ -263,6 +353,50 @@ export default function SchoolAdminDashboard() {
     } catch (err) {
       showMsg('error', err.response?.data?.error || 'Unable to enroll student');
     }
+  };
+
+  const handleCsvImport = async (e) => {
+    e.preventDefault();
+    if (!csvBatchId) return showMsg('error', 'Select a batch for CSV import');
+
+    const rows = parseCsv(csvText);
+    if (!rows.length) return showMsg('error', 'CSV is empty or invalid');
+
+    setCsvImporting(true);
+    const summary = { total: rows.length, success: 0, failed: 0, errors: [] };
+
+    for (let i = 0; i < rows.length; i += 1) {
+      const r = rows[i];
+      try {
+        await api.post('/schooladmin/batch/' + csvBatchId + '/student', {
+          firstName: r.firstName,
+          lastName: r.lastName,
+          dateOfBirth: r.dateOfBirth || undefined,
+          enrollmentNumber: r.enrollmentNumber || undefined,
+          fatherFirstName: r.fatherFirstName || undefined,
+          fatherLastName: r.fatherLastName || undefined,
+          motherFirstName: r.motherFirstName || undefined,
+          motherLastName: r.motherLastName || undefined,
+          guardianFirstName: r.guardianFirstName || undefined,
+          guardianLastName: r.guardianLastName || undefined,
+          parentEmail: r.parentEmail || undefined,
+          parentPhone: r.parentPhone || undefined,
+          secondParentEmail: r.secondParentEmail || undefined,
+          secondParentPhone: r.secondParentPhone || undefined,
+        });
+        summary.success += 1;
+      } catch (err) {
+        summary.failed += 1;
+        summary.errors.push(`Row ${i + 2}: ${err.response?.data?.error || 'Import failed'}`);
+      }
+    }
+
+    setCsvImporting(false);
+    setCsvSummary(summary);
+    if (summary.failed === 0) showMsg('success', `CSV import complete: ${summary.success}/${summary.total} students added`);
+    else showMsg('error', `CSV import finished with errors: ${summary.success} success, ${summary.failed} failed`);
+    loadStudents();
+    loadClasses();
   };
 
   const handleDocumentUpload = async (e) => {
@@ -446,19 +580,128 @@ export default function SchoolAdminDashboard() {
     }
   };
 
+  const handleCreateFee = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/fees', feeForm);
+      showMsg('success', 'Fee reminder created');
+      setShowFeeForm(false);
+      setFeeForm({ studentId: '', amount: '', dueDate: '', description: '' });
+      loadFees();
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to create fee reminder');
+    }
+  };
+
+  const handleUpdateFeeStatus = async (feeId, status) => {
+    try {
+      await api.put('/fees/' + feeId, { status });
+      showMsg('success', 'Status updated');
+      loadFees();
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to update status');
+    }
+  };
+
+  const handleDeleteFee = async (feeId) => {
+    if (!window.confirm('Delete this fee reminder?')) return;
+    try {
+      await api.delete('/fees/' + feeId);
+      showMsg('success', 'Fee reminder deleted');
+      loadFees();
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to delete');
+    }
+  };
+
+  const handleSendReminder = async (feeId) => {
+    setSendingReminder(feeId);
+    try {
+      const res = await api.post('/fees/' + feeId + '/send-reminder');
+      if (res.data.waUrl) window.open(res.data.waUrl, '_blank', 'noopener,noreferrer');
+      showMsg('success', res.data.emailSent ? 'Email sent + WhatsApp opened' : 'WhatsApp opened (no parent email on file)');
+      loadFees();
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to send reminder');
+    } finally {
+      setSendingReminder(null);
+    }
+  };
+
+  const handleSaveBranding = async (e) => {
+    e.preventDefault();
+    setSavingBranding(true);
+    try {
+      const res = await api.put('/schooladmin/school/branding', brandingForm);
+      setBranding(res.data);
+      setBrandingForm({ logoUrl: res.data.logoUrl || '', primaryColor: res.data.primaryColor || '#059669', secondaryColor: res.data.secondaryColor || '#0d9488', tagline: res.data.tagline || '' });
+      showMsg('success', 'Branding saved!');
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to save branding');
+    } finally {
+      setSavingBranding(false);
+    }
+  };
+
+  const handleBrandingLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploadingBrandingLogo(true);
+    try {
+      const url = await uploadImage(file);
+      setBrandingForm((prev) => ({ ...prev, logoUrl: url }));
+      showMsg('success', 'Logo uploaded');
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Logo upload failed');
+    } finally {
+      setUploadingBrandingLogo(false);
+      if (brandingLogoInputRef.current) brandingLogoInputRef.current.value = '';
+    }
+  };
+
+  const handleCreateConsent = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/compliance/consent', consentForm);
+      showMsg('success', 'Consent record saved');
+      setShowConsentForm(false);
+      setConsentForm({ parentId: '', studentId: '', consentType: '', consentText: '', accepted: false });
+      loadConsents();
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to save consent record');
+    }
+  };
+
+  const handleDeleteConsent = async (id) => {
+    if (!window.confirm('Delete this consent record?')) return;
+    try {
+      await api.delete('/compliance/consent/' + id);
+      showMsg('success', 'Consent record deleted');
+      loadConsents();
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to delete consent');
+    }
+  };
+
   const pendingPickups = pickupRequests.filter((req) => req.status === 'pending').length;
   const pendingPtmRequests = ptmRequests.filter((req) => req.status === 'pending').length;
+  const approvedPickups = pickupRequests.filter((req) => req.status === 'approved').length;
+  const approvedPtmRequests = ptmRequests.filter((req) => req.status === 'approved').length;
+  const ptmCompletion = ptmRequests.length ? Math.round((approvedPtmRequests / ptmRequests.length) * 100) : 0;
+  const parentEngagementScore = Math.round(((approvedPickups * 0.4) + (approvedPtmRequests * 0.6)) / Math.max((pickupRequests.length + ptmRequests.length), 1) * 100);
 
   return (
     <SchoolAdminPortalLayout
       title={school?.name || 'School Admin Portal'}
       activeSection={activeTab}
       onSectionChange={setActiveTab}
+      branding={branding}
       badges={{
         staff: staff.length,
         classes: classes.length,
         enrollment: students.length,
         circulars: circulars.length,
+        fees: fees.filter((f) => f.status === 'pending' || f.status === 'overdue').length,
         ptmRequests: pendingPtmRequests,
         pickups: pendingPickups,
       }}
@@ -491,6 +734,19 @@ export default function SchoolAdminDashboard() {
               <p className="text-xs font-medium mt-1">{item.label}</p>
             </button>
           ))}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide">Parent Engagement Score</p>
+            <p className="text-3xl font-bold text-emerald-800 mt-1">{parentEngagementScore}%</p>
+            <p className="text-xs text-emerald-700 mt-1">Based on pickup approvals and PTM approvals</p>
+          </div>
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide">PTM Completion</p>
+            <p className="text-3xl font-bold text-blue-800 mt-1">{ptmCompletion}%</p>
+            <p className="text-xs text-blue-700 mt-1">Approved PTM requests out of all requests</p>
+          </div>
         </div>
 
         {message && <div className={'alert mb-5 ' + (message.type === 'success' ? 'alert-success' : 'alert-error')}>{message.text}</div>}
@@ -693,10 +949,52 @@ export default function SchoolAdminDashboard() {
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-gray-800">Enrolled Students ({students.length})</h3>
-                  {students.length > 0 && !isEditingEnrollment && !showEnrollmentForm && (
-                    <button type="button" onClick={() => setShowEnrollmentForm(true)} className="btn btn-primary btn-sm flex items-center gap-2"><FaPlus /> Enroll Student</button>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => setShowCsvWizard(v => !v)} className="btn btn-sm flex items-center gap-2 border border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100">
+                      <FaFileCsv /> {showCsvWizard ? 'Close CSV Import' : 'CSV Import'}
+                    </button>
+                    {students.length > 0 && !isEditingEnrollment && !showEnrollmentForm && (
+                      <button type="button" onClick={() => setShowEnrollmentForm(true)} className="btn btn-primary btn-sm flex items-center gap-2"><FaPlus /> Enroll Student</button>
+                    )}
+                  </div>
+                </div>
+
+                {showCsvWizard && (
+                <div className="card space-y-3 border border-blue-100 bg-blue-50/40">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-blue-700 font-semibold"><FaFileCsv /> 30-Minute Onboarding Wizard (CSV Import)</div>
+                    <button type="button" onClick={() => setShowCsvWizard(false)} className="text-blue-400 hover:text-blue-600 text-lg leading-none">&times;</button>
+                  </div>
+                  <p className="text-xs text-blue-700">Headers: firstName,lastName,dateOfBirth,enrollmentNumber,fatherFirstName,fatherLastName,parentEmail,parentPhone,motherFirstName,motherLastName,secondParentEmail,secondParentPhone,guardianFirstName,guardianLastName</p>
+                  <form onSubmit={handleCsvImport} className="space-y-3">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <select className="input" value={csvBatchId} onChange={(e) => setCsvBatchId(e.target.value)} required>
+                        <option value="">Select Batch for Import</option>
+                        {classes.flatMap((c) => (c.batches || []).map((b) => (
+                          <option key={b.id} value={b.id}>{c.name} {c.section || ''} - {b.shiftName}</option>
+                        )))}
+                      </select>
+                      <button type="submit" disabled={csvImporting} className="btn btn-primary flex items-center gap-2">
+                        {csvImporting ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <FaUpload />}
+                        {csvImporting ? 'Importing...' : 'Import CSV'}
+                      </button>
+                    </div>
+                    <textarea
+                      rows={6}
+                      value={csvText}
+                      onChange={(e) => setCsvText(e.target.value)}
+                      className="input resize-none"
+                      placeholder="Paste CSV rows here"
+                    />
+                  </form>
+                  {csvSummary && (
+                    <div className="rounded-xl bg-white border border-slate-200 p-3 text-sm text-slate-700">
+                      <p className="font-semibold">Import Result: {csvSummary.success}/{csvSummary.total} success</p>
+                      {csvSummary.errors.slice(0, 5).map((err, idx) => <p key={idx} className="text-xs text-rose-600">{err}</p>)}
+                    </div>
                   )}
                 </div>
+                )}
 
                 {(showEnrollmentForm || isEditingEnrollment) && (
                   <div className="card space-y-6">
@@ -898,6 +1196,15 @@ export default function SchoolAdminDashboard() {
                                   {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
                                 </span>
                               )}
+                              {request.parent?.phone && (
+                                <button
+                                  type="button"
+                                  onClick={() => openWhatsApp(request.parent.phone, `Hi ${request.parent.firstName || 'Parent'}, regarding PTM request for ${request.student?.firstName || 'your child'}, status: ${request.status}.`)}
+                                  className="btn btn-sm btn-outline mt-2 flex items-center gap-2"
+                                >
+                                  <FaWhatsapp className="text-emerald-600" /> WhatsApp Parent
+                                </button>
+                              )}
                             </div>
                           </div>
 
@@ -972,6 +1279,7 @@ export default function SchoolAdminDashboard() {
                             <>
                               <button onClick={() => handlePickupAction(req.id, 'approved')} className="btn btn-sm bg-green-500 hover:bg-green-600 text-white flex items-center gap-1"><FaCheck /> Approve</button>
                               <button onClick={() => handlePickupAction(req.id, 'rejected')} className="btn btn-sm btn-danger flex items-center gap-1"><FaBan /> Reject</button>
+                              <button onClick={() => openWhatsApp(req.parentPhone || req.parent?.phone, `Hi, your pickup request for ${req.student?.firstName || 'your child'} is currently ${req.status}.`)} className="btn btn-sm btn-outline flex items-center gap-1"><FaWhatsapp className="text-emerald-600" /> WhatsApp</button>
                             </>
                           ) : (
                             <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold ${req.status === 'approved' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -982,6 +1290,260 @@ export default function SchoolAdminDashboard() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'fees' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2"><FaMoneyBillWave className="text-green-600" /> Fee Reminders ({fees.length})</h2>
+                  {!showFeeForm && <button type="button" onClick={() => setShowFeeForm(true)} className="btn btn-primary btn-sm flex items-center gap-2"><FaPlus /> Add Fee Reminder</button>}
+                </div>
+
+                {showFeeForm && (
+                  <div className="card border border-green-100 bg-green-50/30 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-gray-800">New Fee Reminder</h3>
+                      <button type="button" onClick={() => setShowFeeForm(false)} className="text-gray-400 hover:text-gray-600"><FaTimes /></button>
+                    </div>
+                    <form onSubmit={handleCreateFee} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <select className="input" value={feeForm.studentId} onChange={(e) => setFeeForm({ ...feeForm, studentId: e.target.value })} required>
+                        <option value="">Select Student</option>
+                        {students.map((s) => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                      </select>
+                      <input className="input" type="number" step="0.01" min="0" placeholder="Amount (₹)" value={feeForm.amount} onChange={(e) => setFeeForm({ ...feeForm, amount: e.target.value })} required />
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Due Date</label>
+                        <input className="input w-full" type="date" value={feeForm.dueDate} onChange={(e) => setFeeForm({ ...feeForm, dueDate: e.target.value })} required />
+                      </div>
+                      <input className="input" placeholder="Description (e.g. Tuition Fee, Term 1)" value={feeForm.description} onChange={(e) => setFeeForm({ ...feeForm, description: e.target.value })} />
+                      <div className="md:col-span-2 flex gap-2">
+                        <button type="submit" className="btn btn-primary">Create Reminder</button>
+                        <button type="button" className="btn btn-outline" onClick={() => setShowFeeForm(false)}>Cancel</button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {fees.length === 0 && !showFeeForm ? (
+                  <div className="card text-center py-12">
+                    <FaMoneyBillWave className="mx-auto text-4xl text-gray-300 mb-3" />
+                    <p className="text-gray-600 mb-4">No fee reminders yet.</p>
+                    <button type="button" onClick={() => setShowFeeForm(true)} className="btn btn-primary mx-auto flex items-center gap-2"><FaPlus /> Add First Fee Reminder</button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {fees.map((fee) => {
+                      const statusColors = { pending: 'bg-amber-100 text-amber-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700', cancelled: 'bg-gray-100 text-gray-500' };
+                      const isPastDue = fee.status === 'pending' && new Date(fee.dueDate) < new Date();
+                      return (
+                        <div key={fee.id} className="card flex flex-col sm:flex-row sm:items-center gap-4">
+                          <div className="flex-1 space-y-1">
+                            <div className="font-semibold text-gray-800">{fee.studentFirst} {fee.studentLast}</div>
+                            <div className="text-sm text-gray-600">{fee.description || 'School Fee'}</div>
+                            <div className="flex items-center gap-3 flex-wrap">
+                              <span className="font-bold text-gray-800">₹{parseFloat(fee.amount).toFixed(2)}</span>
+                              <span className="text-xs text-gray-500">Due: {new Date(fee.dueDate).toLocaleDateString()}</span>
+                              {isPastDue && <span className="text-xs text-red-500 font-semibold">Overdue</span>}
+                            </div>
+                            {fee.reminderSentAt && <div className="text-xs text-gray-400">Last reminded: {new Date(fee.reminderSentAt).toLocaleString()}</div>}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[fee.status] || statusColors.pending}`}>{fee.status.charAt(0).toUpperCase() + fee.status.slice(1)}</span>
+                            {fee.status !== 'paid' && fee.status !== 'cancelled' && (
+                              <>
+                                <button type="button" onClick={() => handleUpdateFeeStatus(fee.id, 'paid')} className="btn btn-sm bg-green-500 hover:bg-green-600 text-white flex items-center gap-1"><FaCheck /> Mark Paid</button>
+                                <button type="button" disabled={sendingReminder === fee.id} onClick={() => handleSendReminder(fee.id)} className="btn btn-sm btn-outline flex items-center gap-1">
+                                  {sendingReminder === fee.id ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500" /> : <FaBell className="text-emerald-600" />}
+                                  Remind
+                                </button>
+                                <button type="button" onClick={() => handleUpdateFeeStatus(fee.id, 'cancelled')} className="btn btn-sm btn-outline text-gray-500 flex items-center gap-1"><FaBan /> Cancel</button>
+                              </>
+                            )}
+                            <button type="button" onClick={() => handleDeleteFee(fee.id)} className="btn btn-sm btn-danger flex items-center gap-1"><FaTrash /></button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'branding' && (
+              <div className="space-y-6 max-w-2xl">
+                <div className="flex items-center gap-2">
+                  <FaPalette className="text-pink-500 text-xl" />
+                  <h2 className="text-lg font-semibold text-gray-800">School Branding</h2>
+                </div>
+                <div className="card space-y-5">
+                  <form onSubmit={handleSaveBranding} className="space-y-5">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 block mb-1">School Logo</label>
+                      <div className="flex items-center gap-4">
+                        {brandingForm.logoUrl ? (
+                          <img src={brandingForm.logoUrl} alt="Logo" className="w-16 h-16 rounded-xl object-contain border border-gray-200 bg-gray-50" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center text-gray-400">
+                            <FaImage />
+                          </div>
+                        )}
+                        <div className="flex flex-col gap-2">
+                          <input
+                            ref={brandingLogoInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={handleBrandingLogoUpload}
+                          />
+                          <button
+                            type="button"
+                            disabled={uploadingBrandingLogo}
+                            onClick={() => brandingLogoInputRef.current?.click()}
+                            className="btn btn-outline btn-sm flex items-center gap-2"
+                          >
+                            {uploadingBrandingLogo ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-500" /> : <FaUpload />}
+                            {uploadingBrandingLogo ? 'Uploading…' : 'Upload Logo'}
+                          </button>
+                          {brandingForm.logoUrl && (
+                            <button type="button" onClick={() => setBrandingForm({ ...brandingForm, logoUrl: '' })} className="text-xs text-red-400 hover:text-red-600 text-left">Remove logo</button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 block mb-1">School Tagline</label>
+                      <input className="input" placeholder="e.g. Nurturing Young Minds" value={brandingForm.tagline} onChange={(e) => setBrandingForm({ ...brandingForm, tagline: e.target.value })} />
+                    </div>
+                    <div className="rounded-xl overflow-hidden border border-gray-200">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-4 pt-3 pb-2 bg-gray-50">Live Preview</p>
+                      <div className="p-4 text-white flex items-center justify-between bg-gradient-to-r from-emerald-600 to-teal-600">
+                        <div className="flex items-center gap-3">
+                          {brandingForm.logoUrl && <img src={brandingForm.logoUrl} alt="Logo" className="w-9 h-9 rounded-lg object-contain bg-white/20" />}
+                          <div>
+                            <p className="font-bold text-base">{school?.name || 'School Name'}</p>
+                            {brandingForm.tagline && <p className="text-xs opacity-80">{brandingForm.tagline}</p>}
+                          </div>
+                        </div>
+                        <p className="text-xs opacity-70">School Admin Portal</p>
+                      </div>
+                    </div>
+                    <button type="submit" disabled={savingBranding} className="btn btn-primary flex items-center gap-2">
+                      {savingBranding ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <FaCheck />}
+                      {savingBranding ? 'Saving…' : 'Save Branding'}
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'compliance' && (
+              <div className="space-y-6">
+                <div className="flex items-center gap-2">
+                  <FaShieldAlt className="text-slate-500 text-xl" />
+                  <h2 className="text-lg font-semibold text-gray-800">Compliance & Audit</h2>
+                </div>
+                <div className="flex gap-2 border-b border-gray-200 pb-3">
+                  <button type="button" onClick={() => setComplianceView('audit')} className={`btn btn-sm flex items-center gap-1 ${complianceView === 'audit' ? 'btn-primary' : 'btn-outline'}`}>
+                    <FaHistory /> Audit Log
+                  </button>
+                  <button type="button" onClick={() => setComplianceView('consents')} className={`btn btn-sm flex items-center gap-1 ${complianceView === 'consents' ? 'btn-primary' : 'btn-outline'}`}>
+                    <FaShieldAlt /> Consent Records
+                  </button>
+                </div>
+
+                {complianceView === 'audit' && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-500">{auditTotal} total events</p>
+                      <button type="button" onClick={() => loadAuditLog(0)} className="btn btn-outline btn-sm">Refresh</button>
+                    </div>
+                    {auditLog.length === 0 ? (
+                      <div className="card text-center py-12 text-gray-400">No audit events yet. Key actions in this portal are automatically logged here.</div>
+                    ) : (
+                      <div className="space-y-2">
+                        {auditLog.map((entry) => (
+                          <div key={entry.id} className="card flex items-start gap-4 py-3">
+                            <div className="w-9 h-9 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 shrink-0 text-sm font-bold uppercase">
+                              {(entry.actorName || '?')[0]}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-gray-800 text-sm">{entry.actorName}</span>
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-600">{entry.actorRole}</span>
+                              </div>
+                              <p className="text-sm text-gray-600 mt-0.5 capitalize">{(entry.action || '').replace(/_/g, ' ')}</p>
+                              {entry.targetType && <p className="text-xs text-gray-400 mt-0.5">{entry.targetType} · {String(entry.targetId || '').slice(0, 14)}</p>}
+                            </div>
+                            <p className="text-xs text-gray-400 shrink-0 whitespace-nowrap">{new Date(entry.createdAt).toLocaleString()}</p>
+                          </div>
+                        ))}
+                        {auditOffset + 50 < auditTotal && (
+                          <button type="button" onClick={() => loadAuditLog(auditOffset + 50)} className="btn btn-outline btn-sm w-full">Load More</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {complianceView === 'consents' && (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-gray-500">{consents.length} consent records</p>
+                      <button type="button" onClick={() => setShowConsentForm((v) => !v)} className="btn btn-primary btn-sm flex items-center gap-1"><FaPlus /> Add Consent</button>
+                    </div>
+
+                    {showConsentForm && (
+                      <div className="card border border-slate-200 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <h3 className="font-semibold text-gray-800">New Consent Record</h3>
+                          <button type="button" onClick={() => setShowConsentForm(false)} className="text-gray-400 hover:text-gray-600"><FaTimes /></button>
+                        </div>
+                        <form onSubmit={handleCreateConsent} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                          <select className="input" value={consentForm.studentId} onChange={(e) => setConsentForm({ ...consentForm, studentId: e.target.value })} required>
+                            <option value="">Select Student</option>
+                            {students.map((s) => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                          </select>
+                          <input className="input" placeholder="Parent ID (UUID)" value={consentForm.parentId} onChange={(e) => setConsentForm({ ...consentForm, parentId: e.target.value })} required />
+                          <input className="input" placeholder="Consent type (e.g. photo_sharing, field_trip)" value={consentForm.consentType} onChange={(e) => setConsentForm({ ...consentForm, consentType: e.target.value })} required />
+                          <label className="flex items-center gap-2 text-sm text-gray-700 px-3 border border-gray-200 rounded-xl bg-gray-50">
+                            <input type="checkbox" checked={consentForm.accepted} onChange={(e) => setConsentForm({ ...consentForm, accepted: e.target.checked })} />
+                            Parent Accepted
+                          </label>
+                          <textarea className="input md:col-span-2 resize-none" rows={2} placeholder="Consent text / description" value={consentForm.consentText} onChange={(e) => setConsentForm({ ...consentForm, consentText: e.target.value })} />
+                          <div className="md:col-span-2 flex gap-2">
+                            <button type="submit" className="btn btn-primary">Save Record</button>
+                            <button type="button" className="btn btn-outline" onClick={() => setShowConsentForm(false)}>Cancel</button>
+                          </div>
+                        </form>
+                      </div>
+                    )}
+
+                    {consents.length === 0 ? (
+                      <div className="card text-center py-12 text-gray-400">No consent records. Track parent consents for photo sharing, field trips, medical procedures, etc.</div>
+                    ) : (
+                      <div className="space-y-3">
+                        {consents.map((c) => (
+                          <div key={c.id} className="card flex items-start justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="font-medium text-gray-800">{c.studentFirst} {c.studentLast}</div>
+                              <div className="text-sm text-gray-600">Parent: {c.parentFirst} {c.parentLast} · <span className="text-gray-400">{c.parentEmail}</span></div>
+                              <div className="flex items-center gap-2 flex-wrap text-xs">
+                                <span className="font-medium text-gray-700 capitalize">{(c.consentType || '').replace(/_/g, ' ')}</span>
+                                <span className={`px-2 py-0.5 rounded-full font-semibold ${c.accepted ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                  {c.accepted ? 'Accepted' : 'Not Accepted'}
+                                </span>
+                                {c.acceptedAt && <span className="text-gray-400">{new Date(c.acceptedAt).toLocaleDateString()}</span>}
+                              </div>
+                              {c.consentText && <p className="text-xs text-gray-400 mt-1">{c.consentText}</p>}
+                            </div>
+                            <button type="button" onClick={() => handleDeleteConsent(c.id)} className="btn btn-sm btn-danger shrink-0"><FaTrash /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

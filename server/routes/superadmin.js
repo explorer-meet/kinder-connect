@@ -121,7 +121,7 @@ router.post('/school', auth, authorize(['super_admin']), async (req, res) => {
       await query("INSERT INTO `user` (id, firstName, lastName, email, phone, password, role, schoolId, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, 'school_admin', ?, 1, NOW(), NOW())",
         [adminId, schoolAdminFirstName || 'School', schoolAdminLastName || 'Admin', schoolAdminEmail, phone || '', hashedPassword, schoolId]);
       await query('UPDATE school SET schoolAdminId = ? WHERE id = ?', [adminId, schoolId]);
-      const token = jwt.sign({ userId: adminId, role: 'school_admin' }, process.env.JWT_SECRET || 'your_secret_key', { expiresIn: '7d' });
+      const token = jwt.sign({ id: adminId, role: 'school_admin', schoolId }, process.env.JWT_SECRET || 'your_secret_key', { expiresIn: '7d' });
       const school = await queryOne('SELECT * FROM school WHERE id = ?', [schoolId]);
       return res.status(201).json({ message: 'School and admin account created successfully', school: { ...school, admin: { id: adminId, email: schoolAdminEmail, token } } });
     }

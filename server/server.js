@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const path = require('path');
 const { pool } = require('./src/lib/db');
+const { createTables } = require('./src/lib/migrate');
 
 dotenv.config();
 
@@ -20,6 +21,7 @@ const connectDB = async () => {
   try {
     await pool.execute('SELECT 1');
     console.log('MySQL Connected');
+    await createTables();
   } catch (err) {
     console.error('MySQL Connection Failed:', err.message);
     process.exit(1);
@@ -40,6 +42,9 @@ app.use('/api/parent', require('./routes/parent'));
 app.use('/api/students', require('./routes/students'));
 app.use('/api/activities', require('./routes/activities'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/fees', require('./routes/fees'));
+app.use('/api/compliance', require('./routes/compliance'));
+app.use('/api/branding', require('./routes/branding'));
 
 // Health Check
 app.get('/api/health', async (req, res) => {

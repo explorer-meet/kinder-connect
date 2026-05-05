@@ -11,6 +11,9 @@ import {
   FaBullhorn,
   FaCalendarAlt,
   FaShuttleVan,
+  FaMoneyBillWave,
+  FaPalette,
+  FaShieldAlt,
 } from 'react-icons/fa';
 
 const NAV_ITEMS = [
@@ -18,8 +21,11 @@ const NAV_ITEMS = [
   { id: 'classes', label: 'Classes & Batches', icon: FaGraduationCap },
   { id: 'enrollment', label: 'Enrollment', icon: FaChild },
   { id: 'circulars', label: 'Circulars', icon: FaBullhorn },
+  { id: 'fees', label: 'Fee Reminders', icon: FaMoneyBillWave },
   { id: 'ptmRequests', label: 'PTM Requests', icon: FaCalendarAlt },
   { id: 'pickups', label: 'Pickup Requests', icon: FaShuttleVan },
+  { id: 'branding', label: 'Branding', icon: FaPalette },
+  { id: 'compliance', label: 'Compliance & Audit', icon: FaShieldAlt },
 ];
 
 const ICON_STYLES = {
@@ -27,8 +33,11 @@ const ICON_STYLES = {
   classes: { tone: 'text-indigo-500', soft: 'bg-indigo-50' },
   enrollment: { tone: 'text-emerald-500', soft: 'bg-emerald-50' },
   circulars: { tone: 'text-violet-500', soft: 'bg-violet-50' },
+  fees: { tone: 'text-green-600', soft: 'bg-green-50' },
   ptmRequests: { tone: 'text-amber-500', soft: 'bg-amber-50' },
   pickups: { tone: 'text-amber-500', soft: 'bg-amber-50' },
+  branding: { tone: 'text-pink-500', soft: 'bg-pink-50' },
+  compliance: { tone: 'text-slate-500', soft: 'bg-slate-100' },
 };
 
 export default function SchoolAdminPortalLayout({
@@ -36,14 +45,19 @@ export default function SchoolAdminPortalLayout({
   activeSection,
   onSectionChange,
   badges = {},
+  branding = {},
   children,
 }) {
   const navigate = useNavigate();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sidebarItemRefs = useRef({});
-
   const navRef = useRef(null);
+
+  const primary = branding?.primaryColor || '#059669';
+  const secondary = branding?.secondaryColor || '#0d9488';
+  const logoUrl = branding?.logoUrl || '';
+  const tagline = branding?.tagline || 'School Admin Portal';
 
   useEffect(() => {
     const nav = navRef.current;
@@ -82,11 +96,19 @@ export default function SchoolAdminPortalLayout({
         lg:relative lg:translate-x-0 lg:shadow-none lg:border-r lg:border-gray-100
       `}
       >
-        <div className="px-6 py-5 min-h-[176px] bg-gradient-to-br from-emerald-600 to-teal-600 shrink-0 flex flex-col justify-between">
+        <div className="px-6 py-5 min-h-[176px] shrink-0 flex flex-col justify-between"
+          style={{ background: `linear-gradient(135deg, ${primary}, ${secondary})` }}>
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-white font-bold text-lg leading-tight">Kinder Connect</p>
-              <p className="text-emerald-100 text-xs mt-0.5">School Admin Portal</p>
+            <div className="flex items-center gap-3 min-w-0">
+              {logoUrl ? (
+                <img src={logoUrl} alt="School logo" className="w-9 h-9 rounded-xl object-contain bg-white/90 p-1 border border-white/70" />
+              ) : (
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white text-xs font-bold border border-white/30">KC</div>
+              )}
+              <div className="min-w-0">
+                <p className="text-white font-bold text-lg leading-tight truncate">Kinder Connect</p>
+                <p className="text-emerald-100 text-xs mt-0.5 truncate">{tagline}</p>
+              </div>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -128,9 +150,10 @@ export default function SchoolAdminPortalLayout({
                 }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium transition-all ${
                   active
-                    ? 'bg-emerald-600 text-white shadow-md shadow-emerald-200'
+                    ? 'text-white shadow-md'
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 }`}
+                style={active ? { backgroundColor: primary } : {}}
               >
                 <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-white/20' : iconTheme.soft}`}>
                   <Icon className={active ? 'text-white' : iconTheme.tone} />
@@ -168,10 +191,15 @@ export default function SchoolAdminPortalLayout({
           >
             <FaBars size={18} />
           </button>
+          {logoUrl ? (
+            <img src={logoUrl} alt="School logo" className="w-10 h-10 rounded-xl object-contain border border-gray-200 bg-white p-1 shrink-0" />
+          ) : null}
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-gray-800 text-base truncate">{title}</h1>
+            <p className="text-xs text-gray-500 truncate mt-0.5">{tagline}</p>
           </div>
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center text-white text-xs font-bold">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
+            style={{ background: `linear-gradient(135deg, ${primary}, ${secondary})` }}>
             {user?.firstName?.[0]}
             {user?.lastName?.[0]}
           </div>

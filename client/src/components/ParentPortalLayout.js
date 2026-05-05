@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
+import api from '../api/api';
 import {
   FaBars,
   FaBook,
@@ -76,9 +77,14 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [branding, setBranding] = useState({ logoUrl: '', primaryColor: '', secondaryColor: '', tagline: '' });
   const navRef = useRef(null);
   const sidebarItemRefs = useRef({});
   const theme = ACCENTS[accent] || ACCENTS.blue;
+  const primary = branding?.primaryColor || '#2563eb';
+  const secondary = branding?.secondaryColor || '#0f766e';
+  const logoUrl = branding?.logoUrl || '';
+  const tagline = branding?.tagline || 'Parent Portal';
 
   const handleLogout = () => {
     logout();
@@ -108,6 +114,23 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
     }
   }, [activeSidebarLabel]);
 
+  useEffect(() => {
+    let mounted = true;
+    const loadBranding = async () => {
+      try {
+        const res = await api.get('/branding/me');
+        if (mounted) setBranding(res.data || {});
+      } catch {
+        if (mounted) setBranding({});
+      }
+    };
+
+    loadBranding();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   const isActive = (item) => {
     if (item.match.some((prefix) => location.pathname.startsWith(prefix))) {
       return true;
@@ -127,11 +150,18 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:relative lg:translate-x-0 lg:shadow-none lg:border-r lg:border-slate-200`}
       >
-        <div className={`px-6 py-5 min-h-[176px] bg-gradient-to-br ${theme.shell} shrink-0 flex flex-col justify-between`}>
+        <div className="px-6 py-5 min-h-[176px] shrink-0 flex flex-col justify-between" style={{ background: `linear-gradient(135deg, ${primary}, ${secondary})` }}>
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-white font-bold text-lg leading-tight">Kinder Connect</p>
-              <p className="text-white/75 text-xs mt-0.5">Parent Portal</p>
+            <div className="flex items-center gap-3 min-w-0">
+              {logoUrl ? (
+                <img src={logoUrl} alt="School logo" className="w-9 h-9 rounded-xl object-contain bg-white/90 p-1 border border-white/70" />
+              ) : (
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white text-xs font-bold border border-white/30">KC</div>
+              )}
+              <div className="min-w-0">
+                <p className="text-white font-bold text-lg leading-tight truncate">Kinder Connect</p>
+                <p className="text-white/80 text-xs mt-0.5 truncate">{tagline}</p>
+              </div>
             </div>
             <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-white/75 hover:text-white">
               <FaTimes />
@@ -193,9 +223,12 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-slate-500 hover:text-slate-700 p-1">
             <FaBars size={18} />
           </button>
+          {logoUrl ? (
+            <img src={logoUrl} alt="School logo" className="w-10 h-10 rounded-xl object-contain border border-slate-200 bg-white p-1 shrink-0" />
+          ) : null}
           <div className="flex-1 min-w-0">
             <h1 className="font-bold text-slate-900 text-base sm:text-lg truncate">{title}</h1>
-            {subtitle && <p className="text-xs sm:text-sm text-slate-500 truncate mt-0.5">{subtitle}</p>}
+            <p className="text-xs sm:text-sm text-slate-500 truncate mt-0.5">{subtitle || tagline}</p>
           </div>
           {rightAction && (
             <button

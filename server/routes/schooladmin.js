@@ -498,10 +498,20 @@ router.delete('/circular/:circularId', auth, authorize(['school_admin']), async 
 router.get('/pickup-requests', auth, authorize(['school_admin']), async (req, res) => {
   try {
     const user = await getCurrentSchoolUser(req.userId);
-    const requests = await query('SELECT pr.*, s.id AS studentRelId, s.firstName AS studentFirstName, s.lastName AS studentLastName FROM pickuprequest pr LEFT JOIN student s ON pr.studentId = s.id WHERE pr.schoolId = ? ORDER BY pr.createdAt DESC', [user.schoolId]);
+    const requests = await query(
+      `SELECT pr.*, s.id AS studentRelId, s.firstName AS studentFirstName, s.lastName AS studentLastName,
+              p.id AS parentRelId, p.firstName AS parentFirstName, p.lastName AS parentLastName, p.phone AS parentPhone, p.email AS parentEmail
+       FROM pickuprequest pr
+       LEFT JOIN student s ON pr.studentId = s.id
+       LEFT JOIN \`user\` p ON pr.requestedById = p.id
+       WHERE pr.schoolId = ?
+       ORDER BY pr.createdAt DESC`,
+      [user.schoolId]
+    );
     res.json(requests.map(r => ({
       ...r,
       student: r.studentRelId ? { id: r.studentRelId, firstName: r.studentFirstName, lastName: r.studentLastName } : null,
+      parent: r.parentRelId ? { id: r.parentRelId, firstName: r.parentFirstName, lastName: r.parentLastName, phone: r.parentPhone, email: r.parentEmail } : null,
     })));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -572,4 +582,64 @@ router.patch('/ptm-request/:requestId', auth, authorize(['school_admin']), async
   }
 });
 
+// ── Branding helpers ──────────────────────────────────────────────────────────
+
+const logAudit = async ({ schoolId, actorId, actorName, actorRole, action, targetType = '', targetId = '', metadata = null, ip = '' }) => {
+  try {
+    await query(
+      'INSERT INTO auditlog (id, schoolId, actorId, actorName, actorRole, action, targetType, targetId, metadata, ipAddress, createdAt) VALUES (?,?,?,?,?,?,?,?,?,?,NOW())',
+      [require('crypto').randomUUID().replace(/-/g, 'c'), schoolId, actorId, actorName, actorRole, action, targetType, targetId, toJ(metadata), ip]
+    );
+  } catch (_) { /* non-fatal */ }
+};
+
+// ── GET /schooladmin/school/branding ─────────────────────────────────────────
+router.get('/school/branding', auth, authorize(['school_admin']), async (req, res) => {
+  try {
+    const user = await getCurrentSchoolUser(req.userId);
+    if (!user?.schoolId) return res.status(400).json({ error: 'No school linked' });
+
+    const branding = await queryOne('SELECT * FROM schoolbranding WHERE schoolId = ? LIMIT 1', [user.schoolId]);
+    res.json(branding || { logoUrl: '', primaryColor: '#059669', secondaryColor: '#0d9488', tagline: '' });
+  } catch (err) {
+    console.error('GET /school/branding error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PUT /schooladmin/school/branding ─────────────────────────────────────────
+router.put('/school/branding', auth, authorize(['school_admin']), async (req, res) => {
+  try {
+    const user = await getCurrentSchoolUser(req.userId);
+    if (!user?.schoolId) return res.status(400).json({ error: 'No school linked' });
+
+    const { logoUrl, primaryColor, secondaryColor, tagline } = req.body;
+
+    const existing = await queryOne('SELECT id FROM schoolbranding WHERE schoolId = ? LIMIT 1', [user.schoolId]);
+    if (existing) {
+      await query(
+        'UPDATE schoolbranding SET logoUrl=COALESCE(?,logoUrl), primaryColor=COALESCE(?,primaryColor), secondaryColor=COALESCE(?,secondaryColor), tagline=COALESCE(?,tagline), updatedAt=NOW() WHERE schoolId=?',
+        [logoUrl ?? null, primaryColor ?? null, secondaryColor ?? null, tagline ?? null, user.schoolId]
+      );
+    } else {
+      const id = newId();
+      await query(
+        'INSERT INTO schoolbranding (id,schoolId,logoUrl,primaryColor,secondaryColor,tagline,updatedAt) VALUES (?,?,?,?,?,?,NOW())',
+        [id, user.schoolId, logoUrl || '', primaryColor || '#059669', secondaryColor || '#0d9488', tagline || '']
+      );
+    }
+
+    const updated = await queryOne('SELECT * FROM schoolbranding WHERE schoolId = ? LIMIT 1', [user.schoolId]);
+
+    const u = await queryOne('SELECT firstName, lastName FROM `user` WHERE id=? LIMIT 1', [req.userId]);
+    await logAudit({ schoolId: user.schoolId, actorId: user.id, actorName: `${u?.firstName} ${u?.lastName}`, actorRole: user.role, action: 'branding_updated', targetType: 'school', targetId: user.schoolId, metadata: { primaryColor, secondaryColor }, ip: req.ip });
+
+    res.json(updated);
+  } catch (err) {
+    console.error('PUT /school/branding error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
+

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import useAuthStore from '../store/authStore';
+import api from '../api/api';
 import {
   FaTimes, FaSignOutAlt, FaChevronRight,
   FaHome, FaLightbulb, FaBullhorn, FaClipboardList, FaCamera,
@@ -43,8 +44,13 @@ export default function TeacherPortalLayout({ title, children }) {
   const location = useLocation();
   const { user, logout } = useAuthStore();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [branding, setBranding] = useState({ logoUrl: '', primaryColor: '', secondaryColor: '', tagline: '' });
   const navRef = useRef(null);
   const sidebarItemRefs = useRef({});
+  const primary = branding?.primaryColor || '#4f46e5';
+  const secondary = branding?.secondaryColor || '#7c3aed';
+  const logoUrl = branding?.logoUrl || '';
+  const tagline = branding?.tagline || 'Teacher Portal';
 
   const handleLogout = () => {
     logout();
@@ -72,6 +78,23 @@ export default function TeacherPortalLayout({ title, children }) {
     }
   }, [activeSidebarId]);
 
+  useEffect(() => {
+    let mounted = true;
+    const loadBranding = async () => {
+      try {
+        const res = await api.get('/branding/me');
+        if (mounted) setBranding(res.data || {});
+      } catch {
+        if (mounted) setBranding({});
+      }
+    };
+
+    loadBranding();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
       {sidebarOpen && (
@@ -86,11 +109,18 @@ export default function TeacherPortalLayout({ title, children }) {
         lg:relative lg:translate-x-0 lg:shadow-none lg:border-r lg:border-gray-100
       `}>
         {/* Brand */}
-        <div className="px-6 py-5 min-h-[176px] bg-gradient-to-br from-indigo-600 to-violet-600 shrink-0 flex flex-col justify-between">
+        <div className="px-6 py-5 min-h-[176px] shrink-0 flex flex-col justify-between" style={{ background: `linear-gradient(135deg, ${primary}, ${secondary})` }}>
           <div className="flex items-center justify-between">
-            <div>
-              <p className="text-white font-bold text-lg leading-tight">Kinder Connect</p>
-              <p className="text-indigo-100 text-xs mt-0.5">Teacher Portal</p>
+            <div className="flex items-center gap-3 min-w-0">
+              {logoUrl ? (
+                <img src={logoUrl} alt="School logo" className="w-9 h-9 rounded-xl object-contain bg-white/90 p-1 border border-white/70" />
+              ) : (
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white text-xs font-bold border border-white/30">KC</div>
+              )}
+              <div className="min-w-0">
+                <p className="text-white font-bold text-lg leading-tight truncate">Kinder Connect</p>
+                <p className="text-indigo-100 text-xs mt-0.5 truncate">{tagline}</p>
+              </div>
             </div>
             <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-white/70 hover:text-white">
               <FaTimes />
@@ -130,9 +160,10 @@ export default function TeacherPortalLayout({ title, children }) {
                 onClick={() => { navigate(path, state ? { state } : undefined); setSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium transition-all ${
                   active
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                    ? 'text-white shadow-md'
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 }`}
+                style={active ? { backgroundColor: primary } : {}}
               >
                 <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-white/20' : iconTheme.soft}`}>
                   <Icon className={active ? 'text-white' : iconTheme.tone} />
@@ -157,9 +188,10 @@ export default function TeacherPortalLayout({ title, children }) {
                 onClick={() => { navigate(path); setSidebarOpen(false); }}
                 className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium transition-all ${
                   active
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                    ? 'text-white shadow-md'
                     : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
                 }`}
+                style={active ? { backgroundColor: primary } : {}}
               >
                 <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-white/20' : iconTheme.soft}`}>
                   <Icon className={active ? 'text-white' : iconTheme.tone} />

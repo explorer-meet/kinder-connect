@@ -88,6 +88,12 @@ export default function TeacherDashboard() {
   const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
   const [showPwSection, setShowPwSection] = useState(false);
   const profilePhotoRef = useRef(null);
+  const [branding, setBranding] = useState({ logoUrl: '', primaryColor: '#4f46e5', secondaryColor: '#7c3aed', tagline: 'Teacher Portal' });
+
+  const primary = branding?.primaryColor || '#4f46e5';
+  const secondary = branding?.secondaryColor || '#7c3aed';
+  const logoUrl = branding?.logoUrl || '';
+  const tagline = branding?.tagline || 'Teacher Portal';
 
   const showToast = (type, text) => {
     setToast({ type, text });
@@ -107,6 +113,20 @@ export default function TeacherDashboard() {
       setCirculars(res.data || []);
     } catch {
       setCirculars([]);
+    }
+  }, []);
+
+  const loadBranding = useCallback(async () => {
+    try {
+      const res = await api.get('/branding/me');
+      setBranding({
+        logoUrl: res.data?.logoUrl || '',
+        primaryColor: res.data?.primaryColor || '#4f46e5',
+        secondaryColor: res.data?.secondaryColor || '#7c3aed',
+        tagline: res.data?.tagline || 'Teacher Portal',
+      });
+    } catch {
+      setBranding((prev) => ({ ...prev }));
     }
   }, []);
 
@@ -256,7 +276,8 @@ export default function TeacherDashboard() {
     loadCirculars();
     loadBatches();
     loadProfile();
-  }, [loadCirculars, loadBatches, loadProfile]);
+    loadBranding();
+  }, [loadCirculars, loadBatches, loadProfile, loadBranding]);
 
   const handleNoteFormChange = (field, value) => {
     setNoteForm((p) => ({ ...p, [field]: value }));
@@ -315,11 +336,18 @@ export default function TeacherDashboard() {
       ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       lg:relative lg:translate-x-0 lg:shadow-none lg:border-r lg:border-gray-100
     `}>
-      <div className="px-6 py-5 min-h-[176px] bg-gradient-to-br from-indigo-600 to-violet-600 shrink-0 flex flex-col justify-between">
+      <div className="px-6 py-5 min-h-[176px] shrink-0 flex flex-col justify-between" style={{ background: `linear-gradient(135deg, ${primary}, ${secondary})` }}>
         <div className="flex items-center justify-between">
-          <div>
-            <p className="text-white font-bold text-lg leading-tight">Kinder Connect</p>
-            <p className="text-indigo-100 text-xs mt-0.5">Teacher Portal</p>
+          <div className="flex items-center gap-3 min-w-0">
+            {logoUrl ? (
+              <img src={logoUrl} alt="School logo" className="w-9 h-9 rounded-xl object-contain bg-white/90 p-1 border border-white/70" />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center text-white text-xs font-bold border border-white/30">KC</div>
+            )}
+            <div className="min-w-0">
+              <p className="text-white font-bold text-lg leading-tight truncate">Kinder Connect</p>
+              <p className="text-indigo-100 text-xs mt-0.5 truncate">{tagline}</p>
+            </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-white/70 hover:text-white">
             <FaTimes />
@@ -352,9 +380,10 @@ export default function TeacherDashboard() {
               onClick={() => go({ id, label, icon: Icon, inline })}
               className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl mb-1 text-sm font-medium transition-all ${
                 active
-                  ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200'
+                  ? 'text-white shadow-md'
                   : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
               }`}
+              style={active ? { backgroundColor: primary } : {}}
             >
               <span className={`w-7 h-7 rounded-lg flex items-center justify-center ${active ? 'bg-white/20' : iconTheme.soft}`}>
                 <Icon className={active ? 'text-white' : iconTheme.tone} />
@@ -396,12 +425,12 @@ export default function TeacherDashboard() {
   // ── Home ───────────────────────────────────────────────────────────────────
   const renderHome = () => (
     <div className="space-y-6">
-      <div className="rounded-2xl bg-gradient-to-br from-indigo-600 via-indigo-500 to-violet-600 p-6 text-white relative overflow-hidden">
+      <div className="rounded-2xl p-6 text-white relative overflow-hidden" style={{ background: `linear-gradient(135deg, ${primary}, ${secondary})` }}>
         <div className="absolute -right-8 -top-8 w-40 h-40 bg-white/10 rounded-full" />
         <div className="absolute -right-2 bottom-0 w-24 h-24 bg-white/5 rounded-full" />
-        <p className="text-indigo-100 text-sm mb-1">Good day,</p>
+        <p className="text-white/85 text-sm mb-1">Good day,</p>
         <h2 className="text-2xl font-bold mb-1">{user?.firstName} {user?.lastName} 👋</h2>
-        <p className="text-indigo-100 text-sm">Here's your teaching overview for today.</p>
+        <p className="text-white/85 text-sm">{tagline}</p>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">

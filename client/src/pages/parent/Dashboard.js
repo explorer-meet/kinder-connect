@@ -6,7 +6,7 @@ import {
   FaCamera, FaBook, FaClipboardList, FaCalendarAlt,
   FaArrowRight, FaShuttleVan, FaPlus, FaTimes, FaCheck, FaBan,
   FaClock, FaUpload, FaBullhorn, FaChild, FaHome, FaSignOutAlt,
-  FaChevronRight, FaMapMarkerAlt, FaUser, FaGraduationCap, FaExclamationTriangle, FaSchool, FaStethoscope,
+  FaChevronRight, FaMapMarkerAlt, FaUser, FaGraduationCap, FaExclamationTriangle, FaSchool, FaStethoscope, FaWhatsapp, FaMoneyBillWave,
 } from 'react-icons/fa';
 
 const NAV = [
@@ -19,6 +19,7 @@ const NAV = [
   { id: 'milestones', label: 'Milestones',       icon: FaGraduationCap },
   { id: 'incidents',  label: 'Incident Reports', icon: FaExclamationTriangle },
   { id: 'ptm',        label: 'PTM Schedule',     icon: FaCalendarAlt },
+  { id: 'fees',       label: 'Fee Reminders',    icon: FaMoneyBillWave },
   { id: 'pickup',     label: 'Pickup / Drop',    icon: FaShuttleVan },
   { id: 'circulars',  label: 'Circulars',        icon: FaBullhorn },
 ];
@@ -32,6 +33,7 @@ const NAV_ICON_STYLES = {
   milestones: { tone: 'text-emerald-500', soft: 'bg-emerald-50' },
   incidents:  { tone: 'text-rose-500',    soft: 'bg-rose-50'    },
   ptm:        { tone: 'text-amber-500',   soft: 'bg-amber-50'   },
+  fees:       { tone: 'text-rose-500',    soft: 'bg-rose-50'    },
   pickup:     { tone: 'text-orange-500',  soft: 'bg-orange-50'  },
   circulars:  { tone: 'text-fuchsia-500', soft: 'bg-fuchsia-50' },
 };
@@ -117,6 +119,8 @@ export default function ParentDashboard() {
   const [loading, setLoading] = useState(true);
   const [circulars, setCirculars] = useState([]);
   const [pickupRequests, setPickupRequests] = useState([]);
+  const [fees, setFees] = useState([]);
+  const [feesLoading, setFeesLoading] = useState(false);
   const [toast, setToast] = useState(null);
   const [expandedCircular, setExpandedCircular] = useState(null);
 
@@ -177,6 +181,9 @@ export default function ParentDashboard() {
   const [showPtmRequestForm, setShowPtmRequestForm] = useState(false);
   const [submittingPtmRequest, setSubmittingPtmRequest] = useState(false);
   const [ptmRequestForm, setPtmRequestForm] = useState({ studentId: '', preferredDate: '', requestNotes: '' });
+  const [digestChildId, setDigestChildId] = useState('');
+  const [digestLoading, setDigestLoading] = useState(false);
+  const [dailyDigest, setDailyDigest] = useState(null);
 
   const showToast = useCallback((type, text) => {
     setToast({ type, text });
@@ -210,6 +217,18 @@ export default function ParentDashboard() {
       setPickupRequests(res.data || []);
     } catch {
       setPickupRequests([]);
+    }
+  };
+
+  const fetchFees = async () => {
+    try {
+      setFeesLoading(true);
+      const res = await api.get('/parent/fees');
+      setFees(res.data || []);
+    } catch {
+      setFees([]);
+    } finally {
+      setFeesLoading(false);
     }
   };
 
@@ -358,6 +377,19 @@ export default function ParentDashboard() {
     }
   }, [fetchPtmSlots, fetchPtmRequests]);
 
+  const loadDailyDigest = useCallback(async (childId) => {
+    if (!childId) return;
+    setDigestLoading(true);
+    try {
+      const res = await api.get(`/parent/child/${childId}/digest`);
+      setDailyDigest(res.data || null);
+    } catch {
+      setDailyDigest(null);
+    } finally {
+      setDigestLoading(false);
+    }
+  }, []);
+
   const handlePickupPhotoUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -468,8 +500,18 @@ export default function ParentDashboard() {
   };
 
   useEffect(() => {
-    Promise.all([fetchChildren(), fetchCirculars(), fetchPickupRequests()]);
+    Promise.all([fetchChildren(), fetchCirculars(), fetchPickupRequests(), fetchFees()]);
   }, []);
+
+  useEffect(() => {
+    if (loading || children.length === 0) return;
+    if (!digestChildId) setDigestChildId(children[0].id);
+  }, [loading, children, digestChildId]);
+
+  useEffect(() => {
+    if (!digestChildId) return;
+    loadDailyDigest(digestChildId);
+  }, [digestChildId, loadDailyDigest]);
 
   useEffect(() => {
     const requestedSection = location.state?.section;
@@ -547,6 +589,7 @@ export default function ParentDashboard() {
   };
 
   const pendingPickups = pickupRequests.filter((r) => r.status === 'pending').length;
+  const pendingFees = fees.filter((f) => ['pending', 'overdue'].includes(String(f.status || '').toLowerCase())).length;
 
   const renderSectionChildPicker = (selectedId, setSelectedId, activeClass, inactiveClass) => {
     if (loading) {
@@ -639,6 +682,9 @@ export default function ParentDashboard() {
               {id === 'pickup' && pendingPickups > 0 && (
                 <span className="ml-auto bg-amber-400 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">{pendingPickups}</span>
               )}
+              {id === 'fees' && pendingFees > 0 && (
+                <span className="ml-auto bg-rose-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold">{pendingFees}</span>
+              )}
               {id === 'circulars' && circulars.length > 0 && (
                 <span className="ml-auto bg-blue-200 text-blue-800 text-xs rounded-full px-1.5 py-0.5 font-semibold">{circulars.length}</span>
               )}
@@ -674,7 +720,7 @@ export default function ParentDashboard() {
           { label: 'Children', value: children.length, color: 'bg-blue-50 border-blue-100', text: 'text-blue-700', icon: FaChild, onClick: () => go('children') },
           { label: 'Circulars', value: circulars.length, color: 'bg-violet-50 border-violet-100', text: 'text-violet-700', icon: FaBullhorn, onClick: () => go('circulars') },
           { label: 'Pending Pickups', value: pendingPickups, color: 'bg-amber-50 border-amber-100', text: 'text-amber-700', icon: FaShuttleVan, onClick: () => go('pickup') },
-          { label: 'Total Requests', value: pickupRequests.length, color: 'bg-emerald-50 border-emerald-100', text: 'text-emerald-700', icon: FaCalendarAlt, onClick: () => go('pickup') },
+          { label: 'Pending Fees', value: pendingFees, color: 'bg-rose-50 border-rose-100', text: 'text-rose-700', icon: FaMoneyBillWave, onClick: () => go('fees') },
         ].map(({ label, value, color, text, icon: Icon, onClick }) => (
           <button
             key={label}
@@ -700,6 +746,7 @@ export default function ParentDashboard() {
             { label: 'Development', icon: FaBook, section: 'report', color: 'from-violet-400 to-violet-600' },
             { label: 'Attendance', icon: FaClipboardList, section: 'attendance', color: 'from-emerald-400 to-emerald-600' },
             { label: 'PTM Schedule', icon: FaCalendarAlt, section: 'ptm', color: 'from-amber-400 to-orange-500' },
+            { label: 'Fee Reminders', icon: FaMoneyBillWave, section: 'fees', color: 'from-rose-400 to-red-500' },
           ].map(({ label, icon: Icon, section, color }) => (
             <button key={label} onClick={() => go(section)} className={`rounded-2xl bg-gradient-to-br ${color} text-white p-5 min-h-[120px] flex flex-col items-start justify-between text-left shadow hover:shadow-lg hover:scale-[1.02] transition-all`}>
               <span className="w-11 h-11 rounded-2xl bg-white/20 flex items-center justify-center">
@@ -709,6 +756,71 @@ export default function ParentDashboard() {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-gray-800">Today's Parent Digest</h3>
+            <p className="text-xs text-slate-500">Attendance, meal, nap, photo and teacher note in one view</p>
+          </div>
+          {children.length > 0 && (
+            <select
+              value={digestChildId}
+              onChange={(e) => setDigestChildId(e.target.value)}
+              className="rounded-xl border border-slate-200 px-3 py-2 text-sm bg-white"
+            >
+              {children.map((c) => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+            </select>
+          )}
+        </div>
+
+        {digestLoading ? (
+          <div className="flex justify-center py-8"><div className="animate-spin rounded-full h-7 w-7 border-b-2 border-blue-500" /></div>
+        ) : !dailyDigest ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">No digest available for today.</div>
+        ) : (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="rounded-2xl bg-blue-50 border border-blue-100 p-3">
+                <p className="text-[11px] text-blue-600 font-semibold uppercase">Attendance</p>
+                <p className="text-sm font-bold text-blue-800 capitalize mt-1">{dailyDigest.attendance?.status || 'Not marked'}</p>
+              </div>
+              <div className="rounded-2xl bg-emerald-50 border border-emerald-100 p-3">
+                <p className="text-[11px] text-emerald-600 font-semibold uppercase">Meal</p>
+                <p className="text-sm font-bold text-emerald-800 mt-1">{dailyDigest.meal?.mealType || 'No update'}</p>
+              </div>
+              <div className="rounded-2xl bg-violet-50 border border-violet-100 p-3">
+                <p className="text-[11px] text-violet-600 font-semibold uppercase">Nap</p>
+                <p className="text-sm font-bold text-violet-800 mt-1">{dailyDigest.nap?.duration ? `${dailyDigest.nap.duration} min` : 'No update'}</p>
+              </div>
+              <div className="rounded-2xl bg-amber-50 border border-amber-100 p-3 col-span-2 lg:col-span-1">
+                <p className="text-[11px] text-amber-600 font-semibold uppercase">Teacher Note</p>
+                <p className="text-sm font-semibold text-amber-800 mt-1 line-clamp-2">{dailyDigest.teacherNote?.text || 'No note yet'}</p>
+              </div>
+              <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3 col-span-2 lg:col-span-1">
+                <p className="text-[11px] text-slate-600 font-semibold uppercase">Photo</p>
+                {dailyDigest.photo?.mediaUrl ? (
+                  <img src={dailyDigest.photo.mediaUrl} alt="Digest" className="mt-2 w-full h-16 rounded-xl object-cover" />
+                ) : (
+                  <p className="text-sm text-slate-500 mt-1">No photo</p>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const childName = `${dailyDigest.student?.firstName || ''} ${dailyDigest.student?.lastName || ''}`.trim();
+                const msg = `Daily Update - ${childName}\nAttendance: ${dailyDigest.attendance?.status || 'Not marked'}\nMeal: ${dailyDigest.meal?.mealType || 'No update'}\nNap: ${dailyDigest.nap?.duration ? `${dailyDigest.nap.duration} min` : 'No update'}\nTeacher Note: ${dailyDigest.teacherNote?.text || 'No note yet'}`;
+                window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank', 'noopener,noreferrer');
+              }}
+              className="rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold px-4 py-2 inline-flex items-center gap-2"
+            >
+              <FaWhatsapp /> Share Digest
+            </button>
+          </>
+        )}
       </div>
 
       {!loading && children.length === 0 && (
@@ -1539,6 +1651,52 @@ export default function ParentDashboard() {
     </div>
   );
 
+  const renderFees = () => {
+    const feeBadge = (status) => {
+      const s = String(status || 'pending').toLowerCase();
+      if (s === 'paid') return 'bg-emerald-100 text-emerald-700';
+      if (s === 'overdue') return 'bg-rose-100 text-rose-700';
+      if (s === 'cancelled') return 'bg-slate-100 text-slate-700';
+      return 'bg-amber-100 text-amber-700';
+    };
+
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FaMoneyBillWave className="text-rose-500" /> Fee Reminders</h2>
+          <button onClick={fetchFees} className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">Refresh</button>
+        </div>
+
+        {feesLoading ? (
+          <div className="flex justify-center py-12 bg-white rounded-3xl border border-slate-200"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500" /></div>
+        ) : fees.length === 0 ? (
+          <div className="rounded-3xl border border-dashed border-slate-200 p-10 text-center bg-white">
+            <FaMoneyBillWave className="mx-auto text-4xl text-slate-300 mb-3" />
+            <p className="text-slate-500">No fee reminders yet.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {fees.map((fee) => (
+              <div key={fee.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div>
+                    <p className="font-semibold text-slate-900">{fee.studentName || 'Student'}</p>
+                    <p className="text-sm text-slate-600 mt-0.5">{fee.description || 'School Fee'}</p>
+                    <p className="text-xs text-slate-400 mt-1">Due: {fee.dueDate ? new Date(fee.dueDate).toLocaleDateString() : 'N/A'}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-slate-900">INR {Number(fee.amount || 0).toFixed(2)}</p>
+                    <span className={`inline-flex mt-1 rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${feeBadge(fee.status)}`}>{fee.status || 'pending'}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const ptmStatusColors = {
     scheduled: 'bg-blue-100 text-blue-700',
     completed: 'bg-emerald-100 text-emerald-700',
@@ -2005,6 +2163,7 @@ export default function ParentDashboard() {
     if (activeSection === 'attendance') return renderAttendance();
     if (activeSection === 'report') return renderReport();
     if (activeSection === 'medical') return renderMedical();
+    if (activeSection === 'fees') return renderFees();
     if (activeSection === 'pickup') return renderPickup();
     if (activeSection === 'circulars') return renderCirculars();
     if (activeSection === 'ptm') return renderPtm();

@@ -9,9 +9,17 @@ const auth = (req, res, next) => {
     }
     
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId = decoded.id;
-    req.userRole = decoded.role;
-    req.schoolId = decoded.schoolId;
+    const userId = decoded.id || decoded.userId;
+    const userRole = decoded.role || decoded.userRole;
+    const schoolId = decoded.schoolId || decoded.schoolID || null;
+
+    if (!userId || !userRole) {
+      return res.status(401).json({ error: 'Invalid token payload' });
+    }
+
+    req.userId = userId;
+    req.userRole = userRole;
+    req.schoolId = schoolId;
     
     next();
   } catch (err) {

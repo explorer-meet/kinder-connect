@@ -123,13 +123,21 @@ router.get('/batch/:batchId/date/:date', auth, async (req, res) => {
 
 router.get('/batch/:batchId/recent', auth, async (req, res) => {
   try {
-    const take = Math.min(parseInt(req.query.take || '30'), 100);
+    const batchId = String(req.params.batchId || '').trim();
+    if (!batchId) return res.status(400).json({ error: 'batchId is required' });
+
+    const parsedTake = Number.parseInt(String(req.query.take ?? '30'), 10);
+    const safeTake = Number.isFinite(parsedTake) ? Math.min(Math.max(parsedTake, 1), 100) : 30;
+
     const activities = await query(
-      'SELECT * FROM activitylog WHERE batchId = ? ORDER BY createdAt DESC LIMIT ?',
-      [req.params.batchId, take]
+      `SELECT * FROM activitylog WHERE batchId = ? ORDER BY createdAt DESC LIMIT ${safeTake}`,
+      [batchId]
     );
     res.json(await Promise.all(activities.map(fmtActivity)));
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    console.error('GET /activities/batch/:batchId/recent error:', err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.get('/student/:studentId/type/:activityType', auth, async (req, res) => {

@@ -153,6 +153,8 @@ export default function LandingPage() {
               <FaHeart /> Built for warm, well-run school experiences
             </div>
 
+            <p className="mt-3 text-sm font-medium text-[#0f766e]">Modern operations for early childhood schools</p>
+
             <h1 className="mt-6 max-w-4xl font-display text-4xl font-bold leading-[0.98] tracking-[-0.04em] text-slate-950 sm:text-6xl lg:text-7xl">
               The kinder school platform that feels as thoughtful as the care you provide.
             </h1>

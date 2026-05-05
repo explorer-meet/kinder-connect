@@ -54,6 +54,85 @@ router.get('/child/:studentId/feed', auth, authorize(['parent']), async (req, re
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// GET child's daily digest (attendance + meal + nap + one photo + teacher note)
+router.get('/child/:studentId/digest', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const student = await queryOne('SELECT id, firstName, lastName, batchId, parentIds FROM student WHERE id = ? LIMIT 1', [req.params.studentId]);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const parentIds = parseJ(student.parentIds) || [];
+    if (!parentIds.includes(req.userId)) return res.status(403).json({ error: 'Not authorized' });
+
+    const requestedDate = req.query.date ? new Date(req.query.date) : new Date();
+    requestedDate.setHours(0, 0, 0, 0);
+    const nextDate = new Date(requestedDate);
+    nextDate.setDate(nextDate.getDate() + 1);
+
+    const [attendance, activities] = await Promise.all([
+      queryOne('SELECT * FROM attendance WHERE studentId = ? AND date >= ? AND date < ? LIMIT 1', [req.params.studentId, requestedDate, nextDate]),
+      query(
+        `SELECT a.*, u.firstName AS teacherFirstName, u.lastName AS teacherLastName
+         FROM activitylog a
+         LEFT JOIN \`user\` u ON a.teacherId = u.id
+         WHERE a.createdAt >= ? AND a.createdAt < ?
+           AND ((a.studentId = ?) OR (a.batchId = ? AND a.activityType IN ('general', 'class_note')))
+         ORDER BY a.createdAt DESC`,
+        [requestedDate, nextDate, req.params.studentId, student.batchId]
+      ),
+    ]);
+
+    const mealLog = activities.find((a) => a.mealType || a.intakeLevel || a.foodItems);
+    const napLog = activities.find((a) => a.napStartTime || a.napEndTime || a.napDuration);
+    const photoLog = activities.find((a) => a.mediaUrl);
+    const noteLog = activities.find((a) => a.notes || a.description || a.caption || a.activityType === 'class_note');
+
+    const digest = {
+      student: { id: student.id, firstName: student.firstName, lastName: student.lastName },
+      date: requestedDate,
+      attendance: attendance
+        ? {
+          status: attendance.status,
+          checkInTime: attendance.checkInTime,
+          checkOutTime: attendance.checkOutTime,
+          notes: attendance.notes || null,
+        }
+        : null,
+      meal: mealLog
+        ? {
+          mealType: mealLog.mealType || null,
+          intakeLevel: mealLog.intakeLevel || null,
+          foodItems: parseJ(mealLog.foodItems),
+          time: mealLog.time || mealLog.createdAt,
+        }
+        : null,
+      nap: napLog
+        ? {
+          start: napLog.napStartTime || null,
+          end: napLog.napEndTime || null,
+          duration: napLog.napDuration || null,
+        }
+        : null,
+      photo: photoLog
+        ? {
+          mediaUrl: photoLog.mediaUrl,
+          mediaType: photoLog.mediaType || null,
+          caption: photoLog.caption || null,
+          createdAt: photoLog.createdAt,
+        }
+        : null,
+      teacherNote: noteLog
+        ? {
+          text: noteLog.notes || noteLog.description || noteLog.caption || null,
+          teacherName: noteLog.teacherFirstName ? `${noteLog.teacherFirstName} ${noteLog.teacherLastName || ''}`.trim() : 'Teacher',
+          createdAt: noteLog.createdAt,
+        }
+        : null,
+    };
+
+    res.json(digest);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // GET monthly development report
 router.get('/child/:studentId/report/:month/:year', auth, authorize(['parent']), async (req, res) => {
   try {
@@ -292,6 +371,36 @@ router.get('/ptm/requests', auth, authorize(['parent']), async (req, res) => {
     })));
   } catch (err) {
     console.error('Parent PTM requests list error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET fee reminders for parent's children
+router.get('/fees', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const rows = await query(
+      `SELECT fr.*, s.firstName AS studentFirstName, s.lastName AS studentLastName
+       FROM feereminder fr
+       JOIN student s ON CONVERT(s.id USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(fr.studentId USING utf8mb4) COLLATE utf8mb4_unicode_ci
+       WHERE JSON_CONTAINS(s.parentIds, JSON_QUOTE(?))
+       ORDER BY
+         CASE fr.status
+           WHEN 'overdue' THEN 1
+           WHEN 'pending' THEN 2
+           WHEN 'paid' THEN 3
+           WHEN 'cancelled' THEN 4
+           ELSE 5
+         END,
+         fr.dueDate ASC`,
+      [req.userId]
+    );
+
+    res.json(rows.map((r) => ({
+      ...r,
+      studentName: `${r.studentFirstName || ''} ${r.studentLastName || ''}`.trim(),
+    })));
+  } catch (err) {
+    console.error('Parent fees list error:', err);
     res.status(500).json({ error: err.message });
   }
 });
