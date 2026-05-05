@@ -387,9 +387,10 @@ router.get('/fees', auth, authorize(['parent']), async (req, res) => {
          CASE fr.status
            WHEN 'overdue' THEN 1
            WHEN 'pending' THEN 2
-           WHEN 'paid' THEN 3
-           WHEN 'cancelled' THEN 4
-           ELSE 5
+           WHEN 'payment_submitted' THEN 3
+           WHEN 'paid' THEN 4
+           WHEN 'cancelled' THEN 5
+           ELSE 6
          END,
          fr.dueDate ASC`,
       [req.userId]
@@ -401,6 +402,72 @@ router.get('/fees', auth, authorize(['parent']), async (req, res) => {
     })));
   } catch (err) {
     console.error('Parent fees list error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /parent/fees/:feeId/submit-payment — parent submits payment proof
+router.post('/fees/:feeId/submit-payment', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const { transactionId, paymentNote, paymentProof } = req.body;
+    if (!transactionId) return res.status(400).json({ error: 'transactionId is required' });
+
+    // Verify this fee belongs to one of the parent's children
+    const fee = await queryOne(
+      `SELECT fr.* FROM feereminder fr
+       JOIN student s ON CONVERT(s.id USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(fr.studentId USING utf8mb4) COLLATE utf8mb4_unicode_ci
+       WHERE CONVERT(fr.id USING utf8mb4) COLLATE utf8mb4_unicode_ci = ? AND JSON_CONTAINS(s.parentIds, JSON_QUOTE(?)) LIMIT 1`,
+      [req.params.feeId, req.userId]
+    );
+    if (!fee) return res.status(404).json({ error: 'Fee reminder not found' });
+    if (!['pending', 'overdue'].includes(fee.status)) return res.status(400).json({ error: 'Fee is not in a payable state' });
+
+    await query(
+      'UPDATE feereminder SET status=?, transactionId=?, paymentNote=?, paymentProof=?, paymentSubmittedAt=NOW(), updatedAt=NOW() WHERE CONVERT(id USING utf8mb4) COLLATE utf8mb4_unicode_ci=?',
+      ['payment_submitted', transactionId, paymentNote || '', paymentProof || null, req.params.feeId]
+    );
+
+    const updated = await queryOne('SELECT * FROM feereminder WHERE CONVERT(id USING utf8mb4) COLLATE utf8mb4_unicode_ci = ? LIMIT 1', [req.params.feeId]);
+    res.json({ success: true, fee: updated });
+  } catch (err) {
+    console.error('POST /parent/fees/:feeId/submit-payment error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /parent/school-payment-details — get school payment details for parent's children's school
+router.get('/school-payment-details', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const child = await queryOne(
+      `SELECT s.schoolId FROM student s WHERE JSON_CONTAINS(s.parentIds, JSON_QUOTE(?)) LIMIT 1`,
+      [req.userId]
+    );
+    if (!child?.schoolId) return res.json({});
+    const details = await queryOne('SELECT * FROM schoolpaymentdetails WHERE CONVERT(schoolId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ? LIMIT 1', [child.schoolId]);
+    res.json(details || {});
+  } catch (err) {
+    console.error('GET /parent/school-payment-details error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PUT /parent/child/:studentId/transportation — toggle opt-in/out
+router.put('/child/:studentId/transportation', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const { transportationOptIn } = req.body;
+    if (typeof transportationOptIn === 'undefined') return res.status(400).json({ error: 'transportationOptIn is required' });
+
+    const student = await queryOne('SELECT id, parentIds, transportationType FROM student WHERE id = ? LIMIT 1', [req.params.studentId]);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const parentIds = parseJ(student.parentIds) || [];
+    if (!parentIds.includes(req.userId)) return res.status(403).json({ error: 'Not authorized' });
+
+    await query('UPDATE student SET transportationOptIn=?, updatedAt=NOW() WHERE id=?', [transportationOptIn ? 1 : 0, req.params.studentId]);
+    const updated = await queryOne('SELECT id, firstName, lastName, transportationType, transportationOptIn FROM student WHERE id=? LIMIT 1', [req.params.studentId]);
+    res.json({ success: true, student: updated });
+  } catch (err) {
+    console.error('PUT /parent/child/:studentId/transportation error:', err);
     res.status(500).json({ error: err.message });
   }
 });

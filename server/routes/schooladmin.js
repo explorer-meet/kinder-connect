@@ -317,8 +317,8 @@ router.post('/batch/:batchId/student', auth, authorize(['school_admin']), async 
 
     const id = newId();
     await query(
-      'INSERT INTO student (id, firstName, lastName, dateOfBirth, enrollmentNumber, photo, schoolId, classId, batchId, parentIds, fatherFirstName, fatherLastName, motherFirstName, motherLastName, guardianFirstName, guardianLastName, documents, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, NOW(), NOW())',
-      [id, firstName, lastName, dateOfBirth ? new Date(dateOfBirth) : null, enrollmentNumber || `STU-${Date.now()}`, photo || null, batch.schoolId, batch.classId, req.params.batchId, JSON.stringify(linkedParentIds), fatherFirstName || null, fatherLastName || null, motherFirstName || null, motherLastName || null, guardianFirstName || null, guardianLastName || null, JSON.stringify(Array.isArray(documents) ? documents : [])]
+      'INSERT INTO student (id, firstName, lastName, dateOfBirth, enrollmentNumber, photo, schoolId, classId, batchId, parentIds, fatherFirstName, fatherLastName, motherFirstName, motherLastName, guardianFirstName, guardianLastName, documents, transportationType, transportationOptIn, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 1, NOW(), NOW())',
+      [id, firstName, lastName, dateOfBirth ? new Date(dateOfBirth) : null, enrollmentNumber || `STU-${Date.now()}`, photo || null, batch.schoolId, batch.classId, req.params.batchId, JSON.stringify(linkedParentIds), fatherFirstName || null, fatherLastName || null, motherFirstName || null, motherLastName || null, guardianFirstName || null, guardianLastName || null, JSON.stringify(Array.isArray(documents) ? documents : []), req.body.transportationType || null]
     );
     const student = await queryOne('SELECT * FROM student WHERE id = ?', [id]);
 
@@ -408,6 +408,7 @@ router.put('/student/:studentId', auth, authorize(['school_admin']), async (req,
     if (guardianFirstName !== undefined){ sets.push('guardianFirstName = ?'); vals.push(guardianFirstName); }
     if (guardianLastName !== undefined) { sets.push('guardianLastName = ?'); vals.push(guardianLastName); }
     if (documents !== undefined)        { sets.push('documents = ?');        vals.push(JSON.stringify(documents)); }
+    if (req.body.transportationType !== undefined) { sets.push('transportationType = ?'); vals.push(req.body.transportationType || null); }
     sets.push('schoolId = ?', 'classId = ?', 'batchId = ?', 'parentIds = ?', 'updatedAt = NOW()');
     vals.push(nextSchoolId, nextClassId, nextBatchId, JSON.stringify(linkedParentIds), req.params.studentId);
 

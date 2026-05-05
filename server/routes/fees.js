@@ -76,7 +76,7 @@ router.put('/:feeId', auth, authorize(['school_admin']), async (req, res) => {
     if (!u?.schoolId) return res.status(400).json({ error: 'No school linked' });
 
     const { status, amount, dueDate, description } = req.body;
-    const allowed = ['pending', 'paid', 'overdue', 'cancelled'];
+    const allowed = ['pending', 'paid', 'overdue', 'cancelled', 'payment_submitted'];
     if (status && !allowed.includes(status)) return res.status(400).json({ error: 'Invalid status' });
 
     const fee = await queryOne('SELECT * FROM feereminder WHERE CONVERT(id USING utf8mb4) COLLATE utf8mb4_unicode_ci = ? AND CONVERT(schoolId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ? LIMIT 1', [req.params.feeId, u.schoolId]);
@@ -93,6 +93,77 @@ router.put('/:feeId', auth, authorize(['school_admin']), async (req, res) => {
     res.json(updated);
   } catch (err) {
     console.error('PUT /fees/:feeId error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /fees/:feeId/ack-payment — school admin acknowledges submitted payment ──
+router.post('/:feeId/ack-payment', auth, authorize(['school_admin']), async (req, res) => {
+  try {
+    const u = await getSchoolUser(req.userId);
+    if (!u?.schoolId) return res.status(400).json({ error: 'No school linked' });
+
+    const { action, adminNote } = req.body; // action: 'approve' | 'reject'
+    if (!['approve', 'reject'].includes(action)) return res.status(400).json({ error: 'action must be approve or reject' });
+
+    const fee = await queryOne('SELECT * FROM feereminder WHERE CONVERT(id USING utf8mb4) COLLATE utf8mb4_unicode_ci = ? AND CONVERT(schoolId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ? LIMIT 1', [req.params.feeId, u.schoolId]);
+    if (!fee) return res.status(404).json({ error: 'Fee reminder not found' });
+    if (fee.status !== 'payment_submitted') return res.status(400).json({ error: 'No payment submission to acknowledge' });
+
+    const newStatus = action === 'approve' ? 'paid' : 'pending';
+    await query('UPDATE feereminder SET status=?, updatedAt=NOW() WHERE CONVERT(id USING utf8mb4) COLLATE utf8mb4_unicode_ci=?', [newStatus, req.params.feeId]);
+
+    await logAudit({ schoolId: u.schoolId, actorId: u.id, actorName: `${u.firstName} ${u.lastName}`, actorRole: u.role, action: action === 'approve' ? 'fee_payment_approved' : 'fee_payment_rejected', targetType: 'feereminder', targetId: req.params.feeId, metadata: { adminNote }, ip: req.ip });
+
+    const updated = await queryOne('SELECT * FROM feereminder WHERE CONVERT(id USING utf8mb4) COLLATE utf8mb4_unicode_ci = ? LIMIT 1', [req.params.feeId]);
+    res.json(updated);
+  } catch (err) {
+    console.error('POST /fees/:feeId/ack-payment error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /fees/payment-details — get school payment details ────────────────────
+router.get('/payment-details', auth, authorize(['school_admin']), async (req, res) => {
+  try {
+    const u = await getSchoolUser(req.userId);
+    if (!u?.schoolId) return res.status(400).json({ error: 'No school linked' });
+    const details = await queryOne('SELECT * FROM schoolpaymentdetails WHERE CONVERT(schoolId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ? LIMIT 1', [u.schoolId]);
+    res.json(details || {});
+  } catch (err) {
+    console.error('GET /fees/payment-details error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PUT /fees/payment-details — upsert school payment details ────────────────
+router.put('/payment-details', auth, authorize(['school_admin']), async (req, res) => {
+  try {
+    const u = await getSchoolUser(req.userId);
+    if (!u?.schoolId) return res.status(400).json({ error: 'No school linked' });
+
+    const { upiId, upiName, bankName, accountNumber, ifscCode, accountName, qrCodeUrl, instructions } = req.body;
+
+    const existing = await queryOne('SELECT id FROM schoolpaymentdetails WHERE CONVERT(schoolId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ? LIMIT 1', [u.schoolId]);
+    if (existing) {
+      await query(
+        'UPDATE schoolpaymentdetails SET upiId=?, upiName=?, bankName=?, accountNumber=?, ifscCode=?, accountName=?, qrCodeUrl=?, instructions=?, updatedAt=NOW() WHERE id=?',
+        [upiId || '', upiName || '', bankName || '', accountNumber || '', ifscCode || '', accountName || '', qrCodeUrl || '', instructions || '', existing.id]
+      );
+    } else {
+      const id = newId();
+      await query(
+        'INSERT INTO schoolpaymentdetails (id, schoolId, upiId, upiName, bankName, accountNumber, ifscCode, accountName, qrCodeUrl, instructions) VALUES (?,?,?,?,?,?,?,?,?,?)',
+        [id, u.schoolId, upiId || '', upiName || '', bankName || '', accountNumber || '', ifscCode || '', accountName || '', qrCodeUrl || '', instructions || '']
+      );
+    }
+
+    await logAudit({ schoolId: u.schoolId, actorId: u.id, actorName: `${u.firstName} ${u.lastName}`, actorRole: u.role, action: 'payment_details_updated', targetType: 'school', targetId: u.schoolId, ip: req.ip });
+
+    const updated = await queryOne('SELECT * FROM schoolpaymentdetails WHERE CONVERT(schoolId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ? LIMIT 1', [u.schoolId]);
+    res.json(updated);
+  } catch (err) {
+    console.error('PUT /fees/payment-details error:', err);
     res.status(500).json({ error: err.message });
   }
 });

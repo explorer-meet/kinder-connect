@@ -50,7 +50,7 @@ const AttendanceView = () => {
   return (
     <ParentPortalLayout
       title="Attendance"
-      subtitle={student ? `${student.firstName} ${student.lastName} attendance summary` : 'Daily attendance, check-ins, and check-outs'}
+      subtitle={student ? `${student.firstName} ${student.lastName} attendance summary` : 'Daily attendance records'}
       accent="emerald"
       rightAction={{ label: 'Back to Dashboard', onClick: () => navigate('/parent/dashboard') }}
     >
@@ -91,8 +91,6 @@ const AttendanceView = () => {
                     <tr>
                       <th>Date</th>
                       <th>Status</th>
-                      <th>Check In</th>
-                      <th>Check Out</th>
                       <th>Notes</th>
                     </tr>
                   </thead>
@@ -105,9 +103,7 @@ const AttendanceView = () => {
                             {a.status.replace('_', ' ')}
                           </span>
                         </td>
-                        <td>{a.checkInTime ? new Date(a.checkInTime).toLocaleTimeString() : '-'}</td>
-                        <td>{a.checkOutTime ? new Date(a.checkOutTime).toLocaleTimeString() : '-'}</td>
-                        <td>{a.notes || '-'}</td>
+                        <td className="text-slate-500 text-sm">{a.notes || '-'}</td>
                       </tr>
                     ))}
                   </tbody>

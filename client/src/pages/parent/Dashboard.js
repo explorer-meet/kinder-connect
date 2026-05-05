@@ -124,6 +124,13 @@ export default function ParentDashboard() {
   const [toast, setToast] = useState(null);
   const [expandedCircular, setExpandedCircular] = useState(null);
 
+  // School payment details
+  const [schoolPaymentDetails, setSchoolPaymentDetails] = useState(null);
+  // Pay Now modal
+  const [payNowFee, setPayNowFee] = useState(null);
+  const [payNowForm, setPayNowForm] = useState({ transactionId: '', paymentNote: '' });
+  const [submittingPayment, setSubmittingPayment] = useState(false);
+
   // Child selection for sidebar sections
   const [activityChildId, setActivityChildId] = useState('');
   const [attendanceChildId, setAttendanceChildId] = useState('');
@@ -223,8 +230,12 @@ export default function ParentDashboard() {
   const fetchFees = async () => {
     try {
       setFeesLoading(true);
-      const res = await api.get('/parent/fees');
-      setFees(res.data || []);
+      const [feesRes, paymentRes] = await Promise.all([
+        api.get('/parent/fees'),
+        api.get('/parent/school-payment-details').catch(() => ({ data: null })),
+      ]);
+      setFees(feesRes.data || []);
+      setSchoolPaymentDetails(paymentRes.data || null);
     } catch {
       setFees([]);
     } finally {
@@ -480,6 +491,34 @@ export default function ParentDashboard() {
       fetchPickupRequests();
     } catch (err) {
       showToast('error', err.response?.data?.error || 'Could not submit request');
+    }
+  };
+
+  const handleTransportOptToggle = async (studentId, currentOptIn) => {
+    const newOptIn = !currentOptIn;
+    try {
+      await api.put(`/parent/child/${studentId}/transportation`, { transportationOptIn: newOptIn });
+      setChildren((prev) => prev.map((c) => c.id === studentId ? { ...c, transportationOptIn: newOptIn ? 1 : 0 } : c));
+      showToast('success', newOptIn ? 'Transportation opted in. Your child will use school transport.' : 'Transportation opted out. You will pick up / drop your child.');
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Could not update transportation preference');
+    }
+  };
+
+  const handlePayNowSubmit = async (e) => {
+    e.preventDefault();
+    if (!payNowFee) return;
+    setSubmittingPayment(true);
+    try {
+      await api.post(`/parent/fees/${payNowFee.id}/submit-payment`, payNowForm);
+      showToast('success', 'Payment submitted! Waiting for school acknowledgement.');
+      setPayNowFee(null);
+      setPayNowForm({ transactionId: '', paymentNote: '' });
+      fetchFees();
+    } catch (err) {
+      showToast('error', err.response?.data?.error || 'Could not submit payment');
+    } finally {
+      setSubmittingPayment(false);
     }
   };
 
@@ -1234,15 +1273,21 @@ export default function ParentDashboard() {
           <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-5 overflow-x-auto">
             <table className="table w-full">
               <thead>
-                <tr><th>Date</th><th>Status</th><th>Check In</th><th>Check Out</th></tr>
+                <tr><th>Date</th><th>Status</th><th>Notes</th></tr>
               </thead>
               <tbody>
                 {attendanceItems.slice(0, 20).map((item) => (
                   <tr key={item.id}>
                     <td>{new Date(item.date).toLocaleDateString()}</td>
-                    <td className="capitalize">{String(item.status || '').replace('_', ' ')}</td>
-                    <td>{item.checkInTime ? new Date(item.checkInTime).toLocaleTimeString() : '-'}</td>
-                    <td>{item.checkOutTime ? new Date(item.checkOutTime).toLocaleTimeString() : '-'}</td>
+                    <td className="capitalize">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
+                        item.status === 'present' ? 'bg-emerald-100 text-emerald-700' :
+                        item.status === 'absent' ? 'bg-rose-100 text-rose-700' :
+                        item.status === 'late' ? 'bg-amber-100 text-amber-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>{String(item.status || '').replace('_', ' ')}</span>
+                    </td>
+                    <td className="text-slate-500 text-sm">{item.notes || '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1521,77 +1566,120 @@ export default function ParentDashboard() {
     );
   };
 
-  const renderPickup = () => (
-    <div className="space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FaShuttleVan className="text-amber-500" /> Pickup / Drop Requests</h2>
-        {!showPickupForm && (
-          <button onClick={() => setShowPickupForm(true)} className="btn btn-primary btn-sm flex items-center gap-2"><FaPlus /> New Request</button>
+  const renderPickup = () => {
+    const transportChildren = children.filter((c) => c.transportationType && ['van', 'eco'].includes(String(c.transportationType).toLowerCase()));
+
+    return (
+      <div className="space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FaShuttleVan className="text-amber-500" /> Pickup / Drop</h2>
+          {!showPickupForm && (
+            <button onClick={() => setShowPickupForm(true)} className="btn btn-primary btn-sm flex items-center gap-2"><FaPlus /> New Request</button>
+          )}
+        </div>
+
+        {/* Transportation Opt-in/Out Cards */}
+        {transportChildren.length > 0 && (
+          <div className="space-y-3">
+            <p className="text-sm font-semibold text-gray-700">School Transport Preference</p>
+            {transportChildren.map((child) => {
+              const optedIn = child.transportationOptIn === 1 || child.transportationOptIn === true;
+              const transportLabel = String(child.transportationType).toLowerCase() === 'van' ? 'School Van' : 'Eco Vehicle';
+              return (
+                <div key={child.id} className={`rounded-2xl border p-4 flex items-center justify-between gap-4 ${optedIn ? 'border-orange-200 bg-orange-50' : 'border-slate-200 bg-white'}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${optedIn ? 'bg-orange-100' : 'bg-slate-100'}`}>
+                      <FaShuttleVan className={optedIn ? 'text-orange-500' : 'text-slate-400'} />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-800">{child.firstName} {child.lastName}</p>
+                      <p className="text-sm text-gray-600">{transportLabel} · {optedIn ? 'Using School Transport' : 'Parent Pickup / Drop'}</p>
+                      {optedIn
+                        ? <p className="text-xs text-orange-600 mt-0.5">Your child will come via school transport</p>
+                        : <p className="text-xs text-slate-500 mt-0.5">You are responsible for pickup and drop</p>
+                      }
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleTransportOptToggle(child.id, optedIn)}
+                    className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${optedIn ? 'bg-slate-100 text-slate-700 hover:bg-slate-200' : 'bg-orange-500 text-white hover:bg-orange-600'}`}
+                  >
+                    {optedIn ? 'Opt Out' : 'Opt In'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         )}
-      </div>
 
-      {showPickupForm && (
-        <div className="bg-white border border-blue-100 rounded-2xl p-5 shadow-sm space-y-4">
-          <div className="flex items-center justify-between">
-            <p className="font-semibold text-gray-800">Request Alternative Pickup / Drop</p>
-            <button onClick={() => setShowPickupForm(false)} className="text-gray-400 hover:text-gray-600"><FaTimes /></button>
-          </div>
-          <div className="bg-blue-50 rounded-xl px-4 py-3 text-xs text-blue-700">
-            By default, Father / Mother / Legal Guardian are authorised. Use this only when someone else needs to pick up or drop your child. School admin must approve first.
-          </div>
-          <form onSubmit={handlePickupSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <select className="input md:col-span-2" value={pickupForm.studentId} onChange={(e) => setPickupForm({ ...pickupForm, studentId: e.target.value })} required>
-              <option value="">Select Child</option>
-              {children.map((c) => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
-            </select>
-            <input className="input" placeholder="Pickup person's full name *" value={pickupForm.personName} onChange={(e) => setPickupForm({ ...pickupForm, personName: e.target.value })} required />
-            <input className="input" placeholder="Mobile number *" value={pickupForm.mobileNumber} onChange={(e) => setPickupForm({ ...pickupForm, mobileNumber: e.target.value })} required />
-            <div className="md:col-span-2 flex items-center gap-3">
-              <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePickupPhotoUpload} />
-              <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto} className="btn btn-outline btn-sm flex items-center gap-2">
-                {uploadingPhoto ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> : <FaUpload />}
-                {pickupForm.photoUrl ? 'Change Photo' : 'Upload Person Photo'}
-              </button>
-              {pickupForm.photoUrl && <a href={pickupForm.photoUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline">Preview Photo</a>}
-            </div>
-            <div className="md:col-span-2 flex gap-3">
-              <button type="submit" className="btn btn-primary flex items-center gap-2"><FaShuttleVan /> Submit Request</button>
-              <button type="button" onClick={() => setShowPickupForm(false)} className="btn btn-outline">Cancel</button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {pickupRequests.length === 0 && !showPickupForm ? (
-        <div className="rounded-2xl border-2 border-dashed border-gray-200 p-12 text-center">
-          <FaShuttleVan className="mx-auto text-4xl text-gray-200 mb-3" />
-          <p className="text-gray-500 font-medium">No pickup requests yet</p>
-          <button onClick={() => setShowPickupForm(true)} className="btn btn-outline btn-sm mt-4 mx-auto flex items-center gap-2"><FaPlus /> Request Pickup</button>
-        </div>
-      ) : (
+        {/* Alternative Pickup Requests */}
         <div className="space-y-3">
-          {pickupRequests.map((req) => (
-            <div key={req.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
-                  <FaShuttleVan className="text-amber-500" />
-                </div>
-                <div>
-                  <p className="font-semibold text-gray-800">{req.student?.firstName} {req.student?.lastName}</p>
-                  <p className="text-sm text-gray-600">→ {req.personName} · {req.mobileNumber}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{new Date(req.createdAt).toLocaleString()}</p>
-                </div>
+          <p className="text-sm font-semibold text-gray-700">Alternative Pickup Requests</p>
+          {showPickupForm && (
+            <div className="bg-white border border-blue-100 rounded-2xl p-5 shadow-sm space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-gray-800">Request Alternative Pickup / Drop</p>
+                <button onClick={() => setShowPickupForm(false)} className="text-gray-400 hover:text-gray-600"><FaTimes /></button>
               </div>
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap ${statusBadge(req.status)}`}>
-                {req.status === 'approved' ? <FaCheck /> : req.status === 'rejected' ? <FaBan /> : <FaClock />}
-                {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
-              </span>
+              <div className="bg-blue-50 rounded-xl px-4 py-3 text-xs text-blue-700">
+                By default, Father / Mother / Legal Guardian are authorised. Use this only when someone else needs to pick up or drop your child. School admin must approve first.
+              </div>
+              <form onSubmit={handlePickupSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <select className="input md:col-span-2" value={pickupForm.studentId} onChange={(e) => setPickupForm({ ...pickupForm, studentId: e.target.value })} required>
+                  <option value="">Select Child</option>
+                  {children.map((c) => <option key={c.id} value={c.id}>{c.firstName} {c.lastName}</option>)}
+                </select>
+                <input className="input" placeholder="Pickup person's full name *" value={pickupForm.personName} onChange={(e) => setPickupForm({ ...pickupForm, personName: e.target.value })} required />
+                <input className="input" placeholder="Mobile number *" value={pickupForm.mobileNumber} onChange={(e) => setPickupForm({ ...pickupForm, mobileNumber: e.target.value })} required />
+                <div className="md:col-span-2 flex items-center gap-3">
+                  <input ref={photoInputRef} type="file" accept="image/*" className="hidden" onChange={handlePickupPhotoUpload} />
+                  <button type="button" onClick={() => photoInputRef.current?.click()} disabled={uploadingPhoto} className="btn btn-outline btn-sm flex items-center gap-2">
+                    {uploadingPhoto ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500" /> : <FaUpload />}
+                    {pickupForm.photoUrl ? 'Change Photo' : 'Upload Person Photo'}
+                  </button>
+                  {pickupForm.photoUrl && <a href={pickupForm.photoUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline">Preview Photo</a>}
+                </div>
+                <div className="md:col-span-2 flex gap-3">
+                  <button type="submit" className="btn btn-primary flex items-center gap-2"><FaShuttleVan /> Submit Request</button>
+                  <button type="button" onClick={() => setShowPickupForm(false)} className="btn btn-outline">Cancel</button>
+                </div>
+              </form>
             </div>
-          ))}
+          )}
+
+          {pickupRequests.length === 0 && !showPickupForm ? (
+            <div className="rounded-2xl border-2 border-dashed border-gray-200 p-10 text-center">
+              <FaShuttleVan className="mx-auto text-4xl text-gray-200 mb-3" />
+              <p className="text-gray-500 font-medium">No alternative pickup requests</p>
+              <p className="text-xs text-gray-400 mt-1">Submit a request when someone other than parents needs to pick up your child</p>
+              <button onClick={() => setShowPickupForm(true)} className="btn btn-outline btn-sm mt-4 mx-auto flex items-center gap-2"><FaPlus /> Request Pickup</button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pickupRequests.map((req) => (
+                <div key={req.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm px-5 py-4 flex items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center">
+                      <FaShuttleVan className="text-amber-500" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-800">{req.student?.firstName} {req.student?.lastName}</p>
+                      <p className="text-sm text-gray-600">→ {req.personName} · {req.mobileNumber}</p>
+                      <p className="text-xs text-gray-400 mt-0.5">{new Date(req.createdAt).toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap ${statusBadge(req.status)}`}>
+                    {req.status === 'approved' ? <FaCheck /> : req.status === 'rejected' ? <FaBan /> : <FaClock />}
+                    {req.status.charAt(0).toUpperCase() + req.status.slice(1)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
-      )}
-    </div>
-  );
+      </div>
+    );
+  };
 
   const renderCirculars = () => (
     <div className="space-y-4">
@@ -1657,8 +1745,11 @@ export default function ParentDashboard() {
       if (s === 'paid') return 'bg-emerald-100 text-emerald-700';
       if (s === 'overdue') return 'bg-rose-100 text-rose-700';
       if (s === 'cancelled') return 'bg-slate-100 text-slate-700';
+      if (s === 'payment_submitted') return 'bg-blue-100 text-blue-700';
       return 'bg-amber-100 text-amber-700';
     };
+
+    const hasPaymentDetails = schoolPaymentDetails && (schoolPaymentDetails.upiId || schoolPaymentDetails.accountNumber);
 
     return (
       <div className="space-y-5">
@@ -1666,6 +1757,76 @@ export default function ParentDashboard() {
           <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2"><FaMoneyBillWave className="text-rose-500" /> Fee Reminders</h2>
           <button onClick={fetchFees} className="rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-700">Refresh</button>
         </div>
+
+        {/* School Payment Details Info */}
+        {hasPaymentDetails && (
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl border border-emerald-100 p-4 space-y-3">
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wide flex items-center gap-1.5">
+              <FaMoneyBillWave /> How to Pay
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {schoolPaymentDetails.upiId && (
+                <div className="bg-white rounded-xl p-3 border border-emerald-100">
+                  <p className="text-xs text-gray-500 font-medium mb-1">UPI</p>
+                  <p className="font-bold text-gray-800 text-sm">{schoolPaymentDetails.upiId}</p>
+                  {schoolPaymentDetails.upiName && <p className="text-xs text-gray-500">{schoolPaymentDetails.upiName}</p>}
+                </div>
+              )}
+              {schoolPaymentDetails.accountNumber && (
+                <div className="bg-white rounded-xl p-3 border border-emerald-100">
+                  <p className="text-xs text-gray-500 font-medium mb-1">Bank Transfer</p>
+                  <p className="font-bold text-gray-800 text-sm">{schoolPaymentDetails.bankName}</p>
+                  <p className="text-xs text-gray-600">A/C: {schoolPaymentDetails.accountNumber}</p>
+                  <p className="text-xs text-gray-600">IFSC: {schoolPaymentDetails.ifscCode}</p>
+                </div>
+              )}
+            </div>
+            {schoolPaymentDetails.instructions && (
+              <p className="text-xs text-gray-600 bg-white rounded-xl p-3 border border-emerald-100 whitespace-pre-wrap">{schoolPaymentDetails.instructions}</p>
+            )}
+          </div>
+        )}
+
+        {/* Pay Now Modal */}
+        {payNowFee && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-gray-900 text-lg">Submit Payment</h3>
+                <button onClick={() => setPayNowFee(null)} className="text-gray-400 hover:text-gray-600 w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100"><FaTimes /></button>
+              </div>
+              <div className="bg-slate-50 rounded-2xl p-4 space-y-1">
+                <p className="font-semibold text-slate-800">{payNowFee.studentName}</p>
+                <p className="text-sm text-slate-600">{payNowFee.description || 'School Fee'}</p>
+                <p className="text-2xl font-bold text-slate-900 mt-1">₹{Number(payNowFee.amount || 0).toFixed(2)}</p>
+              </div>
+              {hasPaymentDetails && (
+                <div className="bg-emerald-50 rounded-xl p-3 text-xs text-emerald-700 space-y-1">
+                  <p className="font-semibold">Pay to:</p>
+                  {schoolPaymentDetails.upiId && <p>UPI: <span className="font-mono font-bold">{schoolPaymentDetails.upiId}</span></p>}
+                  {schoolPaymentDetails.accountNumber && <p>Bank: {schoolPaymentDetails.bankName} · A/C: {schoolPaymentDetails.accountNumber} · IFSC: {schoolPaymentDetails.ifscCode}</p>}
+                </div>
+              )}
+              <form onSubmit={handlePayNowSubmit} className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-700 block mb-1">Transaction ID / UTR Number *</label>
+                  <input className="input w-full font-mono" placeholder="e.g. UTR1234567890" value={payNowForm.transactionId} onChange={(e) => setPayNowForm({ ...payNowForm, transactionId: e.target.value })} required />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-700 block mb-1">Note (optional)</label>
+                  <input className="input w-full" placeholder="e.g. Paid via PhonePe" value={payNowForm.paymentNote} onChange={(e) => setPayNowForm({ ...payNowForm, paymentNote: e.target.value })} />
+                </div>
+                <div className="flex gap-3 pt-1">
+                  <button type="submit" disabled={submittingPayment} className="flex-1 btn btn-primary flex items-center justify-center gap-2">
+                    {submittingPayment ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <FaCheck />}
+                    {submittingPayment ? 'Submitting…' : 'Submit Payment'}
+                  </button>
+                  <button type="button" onClick={() => setPayNowFee(null)} className="btn btn-outline">Cancel</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
 
         {feesLoading ? (
           <div className="flex justify-center py-12 bg-white rounded-3xl border border-slate-200"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-rose-500" /></div>
@@ -1676,21 +1837,41 @@ export default function ParentDashboard() {
           </div>
         ) : (
           <div className="space-y-3">
-            {fees.map((fee) => (
-              <div key={fee.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4">
-                <div className="flex items-start justify-between gap-3 flex-wrap">
-                  <div>
-                    <p className="font-semibold text-slate-900">{fee.studentName || 'Student'}</p>
-                    <p className="text-sm text-slate-600 mt-0.5">{fee.description || 'School Fee'}</p>
-                    <p className="text-xs text-slate-400 mt-1">Due: {fee.dueDate ? new Date(fee.dueDate).toLocaleDateString() : 'N/A'}</p>
+            {fees.map((fee) => {
+              const status = String(fee.status || 'pending').toLowerCase();
+              const isPayable = ['pending', 'overdue'].includes(status);
+              const isAwaitingAck = status === 'payment_submitted';
+              return (
+                <div key={fee.id} className={`bg-white rounded-2xl border shadow-sm p-4 ${isAwaitingAck ? 'border-blue-200' : 'border-slate-200'}`}>
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="font-semibold text-slate-900">{fee.studentName || 'Student'}</p>
+                      <p className="text-sm text-slate-600 mt-0.5">{fee.description || 'School Fee'}</p>
+                      <p className="text-xs text-slate-400 mt-1">Due: {fee.dueDate ? new Date(fee.dueDate).toLocaleDateString() : 'N/A'}</p>
+                      {isAwaitingAck && fee.transactionId && (
+                        <p className="text-xs text-blue-600 mt-1">Transaction: <span className="font-mono">{fee.transactionId}</span></p>
+                      )}
+                    </div>
+                    <div className="text-right space-y-2">
+                      <p className="text-lg font-bold text-slate-900">₹{Number(fee.amount || 0).toFixed(2)}</p>
+                      <span className={`inline-flex mt-1 rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${feeBadge(fee.status)}`}>
+                        {isAwaitingAck ? '⏳ Awaiting School ACK' : (fee.status || 'pending').replace('_', ' ')}
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-lg font-bold text-slate-900">INR {Number(fee.amount || 0).toFixed(2)}</p>
-                    <span className={`inline-flex mt-1 rounded-full px-2.5 py-1 text-xs font-semibold capitalize ${feeBadge(fee.status)}`}>{fee.status || 'pending'}</span>
-                  </div>
+                  {isPayable && (
+                    <div className="mt-3 pt-3 border-t border-slate-100">
+                      <button
+                        onClick={() => { setPayNowFee(fee); setPayNowForm({ transactionId: '', paymentNote: '' }); }}
+                        className="w-full sm:w-auto btn btn-primary flex items-center justify-center gap-2 text-sm"
+                      >
+                        <FaMoneyBillWave /> Pay Now
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

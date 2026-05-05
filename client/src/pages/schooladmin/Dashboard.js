@@ -31,6 +31,8 @@ const emptyEnrollmentForm = {
   photo: '',
   // Documents stored as [{name, url}]
   documents: [],
+  // Transportation
+  transportationType: null,
 };
 
 export default function SchoolAdminDashboard() {
@@ -71,6 +73,13 @@ export default function SchoolAdminDashboard() {
   const [showFeeForm, setShowFeeForm] = useState(false);
   const [feeForm, setFeeForm] = useState({ studentId: '', amount: '', dueDate: '', description: '' });
   const [sendingReminder, setSendingReminder] = useState(null);
+  const [ackingPayment, setAckingPayment] = useState(null);
+
+  // Payment details
+  const [paymentDetails, setPaymentDetails] = useState(null);
+  const [showPaymentSettingsForm, setShowPaymentSettingsForm] = useState(false);
+  const [paymentForm, setPaymentForm] = useState({ upiId: '', upiName: '', bankName: '', accountNumber: '', ifscCode: '', accountName: '', qrCodeUrl: '', instructions: '' });
+  const [savingPaymentDetails, setSavingPaymentDetails] = useState(false);
 
   // Branding
   const [branding, setBranding] = useState({ logoUrl: '', primaryColor: '#059669', secondaryColor: '#0d9488', tagline: '' });
@@ -176,6 +185,25 @@ export default function SchoolAdminDashboard() {
     setFees(res.data || []);
   };
 
+  const loadPaymentDetails = async () => {
+    try {
+      const res = await api.get('/fees/payment-details');
+      setPaymentDetails(res.data || null);
+      if (res.data) {
+        setPaymentForm({
+          upiId: res.data.upiId || '',
+          upiName: res.data.upiName || '',
+          bankName: res.data.bankName || '',
+          accountNumber: res.data.accountNumber || '',
+          ifscCode: res.data.ifscCode || '',
+          accountName: res.data.accountName || '',
+          qrCodeUrl: res.data.qrCodeUrl || '',
+          instructions: res.data.instructions || '',
+        });
+      }
+    } catch (_) {}
+  };
+
   const loadBranding = async () => {
     const res = await api.get('/schooladmin/school/branding');
     const b = res.data || {};
@@ -211,7 +239,7 @@ export default function SchoolAdminDashboard() {
         if (activeTab === 'circulars') await Promise.all([loadSchool(), loadCirculars()]);
         if (activeTab === 'ptmRequests') await Promise.all([loadSchool(), loadPtmRequests()]);
         if (activeTab === 'pickups') await Promise.all([loadSchool(), loadPickupRequests()]);
-        if (activeTab === 'fees') await Promise.all([loadSchool(), loadStudents(), loadFees()]);
+        if (activeTab === 'fees') await Promise.all([loadSchool(), loadStudents(), loadFees(), loadPaymentDetails()]);
         if (activeTab === 'branding') await Promise.all([loadSchool()]);
         if (activeTab === 'compliance') await Promise.all([loadSchool(), loadStudents(), loadAuditLog(0), loadConsents()]);
       } catch (err) {
@@ -331,6 +359,7 @@ export default function SchoolAdminDashboard() {
         secondParentLastName: enrollForm.motherLastName || undefined,
         secondParentPhone: enrollForm.secondParentPhone || undefined,
         documents: enrollForm.documents,
+        transportationType: enrollForm.transportationType || null,
       };
 
       const response = isEditingEnrollment
@@ -515,6 +544,7 @@ export default function SchoolAdminDashboard() {
       guardianLastName: student.guardianLastName || '',
       photo: student.photo || '',
       documents: Array.isArray(student.documents) ? student.documents : [],
+      transportationType: student.transportationType || null,
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -625,6 +655,34 @@ export default function SchoolAdminDashboard() {
       showMsg('error', err.response?.data?.error || 'Unable to send reminder');
     } finally {
       setSendingReminder(null);
+    }
+  };
+
+  const handleAckPayment = async (feeId, action) => {
+    setAckingPayment(feeId);
+    try {
+      await api.post('/fees/' + feeId + '/ack-payment', { action });
+      showMsg('success', action === 'approve' ? 'Payment approved and marked as paid!' : 'Payment rejected — fee returned to pending.');
+      loadFees();
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to acknowledge payment');
+    } finally {
+      setAckingPayment(null);
+    }
+  };
+
+  const handleSavePaymentDetails = async (e) => {
+    e.preventDefault();
+    setSavingPaymentDetails(true);
+    try {
+      const res = await api.put('/fees/payment-details', paymentForm);
+      setPaymentDetails(res.data);
+      showMsg('success', 'Payment details saved!');
+      setShowPaymentSettingsForm(false);
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to save payment details');
+    } finally {
+      setSavingPaymentDetails(false);
     }
   };
 
@@ -1082,6 +1140,20 @@ export default function SchoolAdminDashboard() {
                         <p className="text-xs text-amber-600">By default, father, mother, or legal guardian are authorized to pick up and drop the child.</p>
                       </div>
 
+                      {/* ── Transportation ── */}
+                      <div className="bg-orange-50 rounded-xl p-4 space-y-2">
+                        <p className="text-xs font-semibold text-orange-700 uppercase tracking-wide">Transportation</p>
+                        <div>
+                          <label className="text-xs text-gray-600 mb-1 block">Transportation Mode</label>
+                          <select className="input" value={enrollForm.transportationType || ''} onChange={(e) => setEnrollForm({ ...enrollForm, transportationType: e.target.value || null })}>
+                            <option value="">None (Parent Pickup/Drop)</option>
+                            <option value="van">School Van</option>
+                            <option value="eco">Eco Vehicle</option>
+                          </select>
+                        </div>
+                        <p className="text-xs text-orange-600">Parents can opt in/out of school transportation from their portal.</p>
+                      </div>
+
                       {/* ── Documents ── */}
                       <div>
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Documents</p>
@@ -1297,78 +1369,194 @@ export default function SchoolAdminDashboard() {
 
             {activeTab === 'fees' && (
               <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2"><FaMoneyBillWave className="text-green-600" /> Fee Reminders ({fees.length})</h2>
-                  {!showFeeForm && <button type="button" onClick={() => setShowFeeForm(true)} className="btn btn-primary btn-sm flex items-center gap-2"><FaPlus /> Add Fee Reminder</button>}
-                </div>
-
-                {showFeeForm && (
-                  <div className="card border border-green-100 bg-green-50/30 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h3 className="font-semibold text-gray-800">New Fee Reminder</h3>
-                      <button type="button" onClick={() => setShowFeeForm(false)} className="text-gray-400 hover:text-gray-600"><FaTimes /></button>
+                {/* Payment Settings Card */}
+                <div className="rounded-2xl border border-emerald-100 bg-gradient-to-r from-emerald-50 to-teal-50 p-5">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                      <h3 className="font-semibold text-gray-800 flex items-center gap-2"><FaMoneyBillWave className="text-emerald-600" /> Payment Collection Details</h3>
+                      <p className="text-xs text-gray-500 mt-0.5">Share these details with parents so they can pay fees</p>
                     </div>
-                    <form onSubmit={handleCreateFee} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <select className="input" value={feeForm.studentId} onChange={(e) => setFeeForm({ ...feeForm, studentId: e.target.value })} required>
-                        <option value="">Select Student</option>
-                        {students.map((s) => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
-                      </select>
-                      <input className="input" type="number" step="0.01" min="0" placeholder="Amount (₹)" value={feeForm.amount} onChange={(e) => setFeeForm({ ...feeForm, amount: e.target.value })} required />
-                      <div>
-                        <label className="text-xs text-gray-500 mb-1 block">Due Date</label>
-                        <input className="input w-full" type="date" value={feeForm.dueDate} onChange={(e) => setFeeForm({ ...feeForm, dueDate: e.target.value })} required />
+                    <button type="button" onClick={() => setShowPaymentSettingsForm((v) => !v)} className="btn btn-sm btn-outline flex items-center gap-2">
+                      {showPaymentSettingsForm ? <FaTimes /> : <FaPlus />}
+                      {showPaymentSettingsForm ? 'Cancel' : (paymentDetails?.upiId || paymentDetails?.accountNumber ? 'Edit Details' : 'Add Payment Details')}
+                    </button>
+                  </div>
+
+                  {!showPaymentSettingsForm && paymentDetails && (paymentDetails.upiId || paymentDetails.accountNumber) && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {paymentDetails.upiId && (
+                        <div className="bg-white rounded-xl p-4 border border-emerald-100">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">UPI Details</p>
+                          <p className="font-bold text-gray-800">{paymentDetails.upiId}</p>
+                          {paymentDetails.upiName && <p className="text-sm text-gray-600">{paymentDetails.upiName}</p>}
+                        </div>
+                      )}
+                      {paymentDetails.accountNumber && (
+                        <div className="bg-white rounded-xl p-4 border border-emerald-100">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Bank Account</p>
+                          <p className="font-bold text-gray-800">{paymentDetails.bankName}</p>
+                          <p className="text-sm text-gray-600">A/C: {paymentDetails.accountNumber}</p>
+                          <p className="text-sm text-gray-600">IFSC: {paymentDetails.ifscCode}</p>
+                          {paymentDetails.accountName && <p className="text-sm text-gray-500">{paymentDetails.accountName}</p>}
+                        </div>
+                      )}
+                      {paymentDetails.instructions && (
+                        <div className="md:col-span-2 bg-white rounded-xl p-4 border border-emerald-100">
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Payment Instructions</p>
+                          <p className="text-sm text-gray-700 whitespace-pre-wrap">{paymentDetails.instructions}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!showPaymentSettingsForm && (!paymentDetails || (!paymentDetails.upiId && !paymentDetails.accountNumber)) && (
+                    <p className="text-sm text-amber-600 mt-3 font-medium">⚠ No payment details added yet. Parents won't see payment information.</p>
+                  )}
+
+                  {showPaymentSettingsForm && (
+                    <form onSubmit={handleSavePaymentDetails} className="mt-4 bg-white rounded-xl border border-emerald-100 p-5 space-y-4">
+                      <p className="font-semibold text-gray-700 text-sm">UPI Details</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input className="input" placeholder="UPI ID (e.g. school@upi)" value={paymentForm.upiId} onChange={(e) => setPaymentForm({ ...paymentForm, upiId: e.target.value })} />
+                        <input className="input" placeholder="UPI Name / Display Name" value={paymentForm.upiName} onChange={(e) => setPaymentForm({ ...paymentForm, upiName: e.target.value })} />
                       </div>
-                      <input className="input" placeholder="Description (e.g. Tuition Fee, Term 1)" value={feeForm.description} onChange={(e) => setFeeForm({ ...feeForm, description: e.target.value })} />
-                      <div className="md:col-span-2 flex gap-2">
-                        <button type="submit" className="btn btn-primary">Create Reminder</button>
-                        <button type="button" className="btn btn-outline" onClick={() => setShowFeeForm(false)}>Cancel</button>
+                      <p className="font-semibold text-gray-700 text-sm pt-2">Bank Account Details</p>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <input className="input" placeholder="Bank Name" value={paymentForm.bankName} onChange={(e) => setPaymentForm({ ...paymentForm, bankName: e.target.value })} />
+                        <input className="input" placeholder="Account Number" value={paymentForm.accountNumber} onChange={(e) => setPaymentForm({ ...paymentForm, accountNumber: e.target.value })} />
+                        <input className="input" placeholder="IFSC Code" value={paymentForm.ifscCode} onChange={(e) => setPaymentForm({ ...paymentForm, ifscCode: e.target.value })} />
+                        <input className="input" placeholder="Account Holder Name" value={paymentForm.accountName} onChange={(e) => setPaymentForm({ ...paymentForm, accountName: e.target.value })} />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-500 mb-1 block">Payment Instructions (optional)</label>
+                        <textarea className="input resize-none w-full" rows={2} placeholder="e.g. Please add student name in remarks. Contact office for queries." value={paymentForm.instructions} onChange={(e) => setPaymentForm({ ...paymentForm, instructions: e.target.value })} />
+                      </div>
+                      <div className="flex gap-2">
+                        <button type="submit" disabled={savingPaymentDetails} className="btn btn-primary flex items-center gap-2">
+                          {savingPaymentDetails ? <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <FaCheck />}
+                          {savingPaymentDetails ? 'Saving…' : 'Save Payment Details'}
+                        </button>
+                        <button type="button" className="btn btn-outline" onClick={() => setShowPaymentSettingsForm(false)}>Cancel</button>
                       </div>
                     </form>
+                  )}
+                </div>
+
+                {/* Pending Payment Acknowledgements */}
+                {fees.filter((f) => f.status === 'payment_submitted').length > 0 && (
+                  <div className="space-y-3">
+                    <h3 className="font-semibold text-gray-800 flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse inline-block" />
+                      Payment Acknowledgements Pending ({fees.filter((f) => f.status === 'payment_submitted').length})
+                    </h3>
+                    {fees.filter((f) => f.status === 'payment_submitted').map((fee) => (
+                      <div key={fee.id} className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-3 flex-wrap">
+                          <div>
+                            <p className="font-semibold text-gray-800">{fee.studentFirst} {fee.studentLast}</p>
+                            <p className="text-sm text-gray-600">{fee.description || 'School Fee'} · <span className="font-bold text-gray-800">₹{parseFloat(fee.amount).toFixed(2)}</span></p>
+                            <p className="text-xs text-gray-400 mt-0.5">Submitted: {fee.paymentSubmittedAt ? new Date(fee.paymentSubmittedAt).toLocaleString() : 'N/A'}</p>
+                          </div>
+                          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-700">⏳ Awaiting ACK</span>
+                        </div>
+                        {fee.transactionId && (
+                          <div className="bg-white rounded-xl px-4 py-3 border border-amber-100 text-sm">
+                            <span className="font-semibold text-gray-700">Transaction ID: </span>
+                            <span className="text-gray-600 font-mono">{fee.transactionId}</span>
+                            {fee.paymentNote && <p className="text-xs text-gray-500 mt-1">{fee.paymentNote}</p>}
+                            {fee.paymentProof && (
+                              <a href={fee.paymentProof} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline block mt-1">View Payment Proof</a>
+                            )}
+                          </div>
+                        )}
+                        <div className="flex gap-2">
+                          <button type="button" disabled={ackingPayment === fee.id} onClick={() => handleAckPayment(fee.id, 'approve')} className="btn btn-sm bg-emerald-500 hover:bg-emerald-600 text-white flex items-center gap-1">
+                            {ackingPayment === fee.id ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-white" /> : <FaCheck />}
+                            Approve & Mark Paid
+                          </button>
+                          <button type="button" disabled={ackingPayment === fee.id} onClick={() => handleAckPayment(fee.id, 'reject')} className="btn btn-sm btn-outline text-red-500 border-red-200 flex items-center gap-1">
+                            <FaBan /> Reject
+                          </button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
 
-                {fees.length === 0 && !showFeeForm ? (
-                  <div className="card text-center py-12">
-                    <FaMoneyBillWave className="mx-auto text-4xl text-gray-300 mb-3" />
-                    <p className="text-gray-600 mb-4">No fee reminders yet.</p>
-                    <button type="button" onClick={() => setShowFeeForm(true)} className="btn btn-primary mx-auto flex items-center gap-2"><FaPlus /> Add First Fee Reminder</button>
+                {/* Fee Reminders List */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2"><FaMoneyBillWave className="text-green-600" /> Fee Reminders ({fees.filter((f) => f.status !== 'payment_submitted').length})</h2>
+                    {!showFeeForm && <button type="button" onClick={() => setShowFeeForm(true)} className="btn btn-primary btn-sm flex items-center gap-2"><FaPlus /> Add Fee Reminder</button>}
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    {fees.map((fee) => {
-                      const statusColors = { pending: 'bg-amber-100 text-amber-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700', cancelled: 'bg-gray-100 text-gray-500' };
-                      const isPastDue = fee.status === 'pending' && new Date(fee.dueDate) < new Date();
-                      return (
-                        <div key={fee.id} className="card flex flex-col sm:flex-row sm:items-center gap-4">
-                          <div className="flex-1 space-y-1">
-                            <div className="font-semibold text-gray-800">{fee.studentFirst} {fee.studentLast}</div>
-                            <div className="text-sm text-gray-600">{fee.description || 'School Fee'}</div>
-                            <div className="flex items-center gap-3 flex-wrap">
-                              <span className="font-bold text-gray-800">₹{parseFloat(fee.amount).toFixed(2)}</span>
-                              <span className="text-xs text-gray-500">Due: {new Date(fee.dueDate).toLocaleDateString()}</span>
-                              {isPastDue && <span className="text-xs text-red-500 font-semibold">Overdue</span>}
-                            </div>
-                            {fee.reminderSentAt && <div className="text-xs text-gray-400">Last reminded: {new Date(fee.reminderSentAt).toLocaleString()}</div>}
-                          </div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[fee.status] || statusColors.pending}`}>{fee.status.charAt(0).toUpperCase() + fee.status.slice(1)}</span>
-                            {fee.status !== 'paid' && fee.status !== 'cancelled' && (
-                              <>
-                                <button type="button" onClick={() => handleUpdateFeeStatus(fee.id, 'paid')} className="btn btn-sm bg-green-500 hover:bg-green-600 text-white flex items-center gap-1"><FaCheck /> Mark Paid</button>
-                                <button type="button" disabled={sendingReminder === fee.id} onClick={() => handleSendReminder(fee.id)} className="btn btn-sm btn-outline flex items-center gap-1">
-                                  {sendingReminder === fee.id ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500" /> : <FaBell className="text-emerald-600" />}
-                                  Remind
-                                </button>
-                                <button type="button" onClick={() => handleUpdateFeeStatus(fee.id, 'cancelled')} className="btn btn-sm btn-outline text-gray-500 flex items-center gap-1"><FaBan /> Cancel</button>
-                              </>
-                            )}
-                            <button type="button" onClick={() => handleDeleteFee(fee.id)} className="btn btn-sm btn-danger flex items-center gap-1"><FaTrash /></button>
-                          </div>
+
+                  {showFeeForm && (
+                    <div className="card border border-green-100 bg-green-50/30 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-gray-800">New Fee Reminder</h3>
+                        <button type="button" onClick={() => setShowFeeForm(false)} className="text-gray-400 hover:text-gray-600"><FaTimes /></button>
+                      </div>
+                      <form onSubmit={handleCreateFee} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <select className="input" value={feeForm.studentId} onChange={(e) => setFeeForm({ ...feeForm, studentId: e.target.value })} required>
+                          <option value="">Select Student</option>
+                          {students.map((s) => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
+                        </select>
+                        <input className="input" type="number" step="0.01" min="0" placeholder="Amount (₹)" value={feeForm.amount} onChange={(e) => setFeeForm({ ...feeForm, amount: e.target.value })} required />
+                        <div>
+                          <label className="text-xs text-gray-500 mb-1 block">Due Date</label>
+                          <input className="input w-full" type="date" value={feeForm.dueDate} onChange={(e) => setFeeForm({ ...feeForm, dueDate: e.target.value })} required />
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        <input className="input" placeholder="Description (e.g. Tuition Fee, Term 1)" value={feeForm.description} onChange={(e) => setFeeForm({ ...feeForm, description: e.target.value })} />
+                        <div className="md:col-span-2 flex gap-2">
+                          <button type="submit" className="btn btn-primary">Create Reminder</button>
+                          <button type="button" className="btn btn-outline" onClick={() => setShowFeeForm(false)}>Cancel</button>
+                        </div>
+                      </form>
+                    </div>
+                  )}
+
+                  {fees.filter((f) => f.status !== 'payment_submitted').length === 0 && !showFeeForm ? (
+                    <div className="card text-center py-12">
+                      <FaMoneyBillWave className="mx-auto text-4xl text-gray-300 mb-3" />
+                      <p className="text-gray-600 mb-4">No fee reminders yet.</p>
+                      <button type="button" onClick={() => setShowFeeForm(true)} className="btn btn-primary mx-auto flex items-center gap-2"><FaPlus /> Add First Fee Reminder</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {fees.filter((f) => f.status !== 'payment_submitted').map((fee) => {
+                        const statusColors = { pending: 'bg-amber-100 text-amber-700', paid: 'bg-green-100 text-green-700', overdue: 'bg-red-100 text-red-700', cancelled: 'bg-gray-100 text-gray-500' };
+                        const isPastDue = fee.status === 'pending' && new Date(fee.dueDate) < new Date();
+                        return (
+                          <div key={fee.id} className="card flex flex-col sm:flex-row sm:items-center gap-4">
+                            <div className="flex-1 space-y-1">
+                              <div className="font-semibold text-gray-800">{fee.studentFirst} {fee.studentLast}</div>
+                              <div className="text-sm text-gray-600">{fee.description || 'School Fee'}</div>
+                              <div className="flex items-center gap-3 flex-wrap">
+                                <span className="font-bold text-gray-800">₹{parseFloat(fee.amount).toFixed(2)}</span>
+                                <span className="text-xs text-gray-500">Due: {new Date(fee.dueDate).toLocaleDateString()}</span>
+                                {isPastDue && <span className="text-xs text-red-500 font-semibold">Overdue</span>}
+                              </div>
+                              {fee.reminderSentAt && <div className="text-xs text-gray-400">Last reminded: {new Date(fee.reminderSentAt).toLocaleString()}</div>}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold ${statusColors[fee.status] || statusColors.pending}`}>{(fee.status || 'pending').charAt(0).toUpperCase() + (fee.status || 'pending').slice(1)}</span>
+                              {fee.status !== 'paid' && fee.status !== 'cancelled' && (
+                                <>
+                                  <button type="button" onClick={() => handleUpdateFeeStatus(fee.id, 'paid')} className="btn btn-sm bg-green-500 hover:bg-green-600 text-white flex items-center gap-1"><FaCheck /> Mark Paid</button>
+                                  <button type="button" disabled={sendingReminder === fee.id} onClick={() => handleSendReminder(fee.id)} className="btn btn-sm btn-outline flex items-center gap-1">
+                                    {sendingReminder === fee.id ? <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-500" /> : <FaBell className="text-emerald-600" />}
+                                    Remind
+                                  </button>
+                                  <button type="button" onClick={() => handleUpdateFeeStatus(fee.id, 'cancelled')} className="btn btn-sm btn-outline text-gray-500 flex items-center gap-1"><FaBan /> Cancel</button>
+                                </>
+                              )}
+                              <button type="button" onClick={() => handleDeleteFee(fee.id)} className="btn btn-sm btn-danger flex items-center gap-1"><FaTrash /></button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 
