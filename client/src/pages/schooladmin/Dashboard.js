@@ -5,7 +5,7 @@ import useAuthStore from '../../store/authStore';
 import SchoolAdminPortalLayout from '../../components/SchoolAdminPortalLayout';
 import { FaUsers, FaUserPlus, FaGraduationCap, FaPlus, FaLayerGroup, FaChild, FaTrash, FaBullhorn, FaTimes, FaUpload, FaFilePdf, FaImage, FaCheck, FaBan, FaCamera, FaCalendarAlt, FaClock, FaFileCsv, FaWhatsapp, FaMoneyBillWave, FaPalette, FaShieldAlt, FaHistory, FaBell } from 'react-icons/fa';
 
-const TABS = ['staff', 'classes', 'enrollment', 'circulars', 'ptmRequests', 'pickups', 'fees', 'branding', 'compliance'];
+const TABS = ['staff', 'classes', 'enrollment', 'circulars', 'feeStructure', 'fees', 'ptmRequests', 'pickups', 'branding', 'compliance'];
 
 const emptyEnrollmentForm = {
   classId: '',
@@ -70,10 +70,32 @@ export default function SchoolAdminDashboard() {
 
   // Fee reminders
   const [fees, setFees] = useState([]);
+  const [feeStructures, setFeeStructures] = useState([]);
   const [showFeeForm, setShowFeeForm] = useState(false);
+  const [showFeeStructureForm, setShowFeeStructureForm] = useState(false);
+  const [isEditingFeeStructure, setIsEditingFeeStructure] = useState(false);
+  const [editingFeeStructureId, setEditingFeeStructureId] = useState(null);
   const [feeForm, setFeeForm] = useState({ studentId: '', amount: '', dueDate: '', description: '' });
+  const [feeStructureForm, setFeeStructureForm] = useState({
+    classId: '',
+    batchId: '',
+    title: '',
+    description: '',
+    part1Amount: '',
+    part1DueDate: '',
+    part2Amount: '',
+    part2DueDate: '',
+    part3Amount: '',
+    part3DueDate: '',
+  });
   const [sendingReminder, setSendingReminder] = useState(null);
   const [ackingPayment, setAckingPayment] = useState(null);
+  
+  // Student fee structures
+  const [studentFeeStructures, setStudentFeeStructures] = useState([]);
+  const [showStudentFeeStructuresModal, setShowStudentFeeStructuresModal] = useState(false);
+  const [selectedStudentForFees, setSelectedStudentForFees] = useState(null);
+  const [sendingStudentFeeReminder, setSendingStudentFeeReminder] = useState(null);
 
   // Payment details
   const [paymentDetails, setPaymentDetails] = useState(null);
@@ -113,6 +135,19 @@ export default function SchoolAdminDashboard() {
   const [circularForm, setCircularForm] = useState({ title: '', description: '', content: '', circularType: 'general', expiryDate: '' });
 
   const selectedClassForEnroll = useMemo(() => classes.find((cls) => cls.id === enrollForm.classId) || null, [classes, enrollForm.classId]);
+  const selectedClassForFeeStructure = useMemo(() => classes.find((cls) => cls.id === feeStructureForm.classId) || null, [classes, feeStructureForm.classId]);
+  const selectedStudentForConsent = useMemo(() => students.find((student) => student.id === consentForm.studentId) || null, [students, consentForm.studentId]);
+  const consentParentOptions = useMemo(() => {
+    if (!selectedStudentForConsent || !Array.isArray(selectedStudentForConsent.parentIds)) return [];
+    return selectedStudentForConsent.parentIds.map((parentId, idx) => ({
+      id: parentId,
+      label: idx === 0
+        ? `${selectedStudentForConsent.fatherFirstName || 'Parent'} ${selectedStudentForConsent.fatherLastName || ''}`.trim()
+        : idx === 1
+          ? `${selectedStudentForConsent.motherFirstName || 'Parent'} ${selectedStudentForConsent.motherLastName || ''}`.trim()
+          : `Parent ${idx + 1}`,
+    }));
+  }, [selectedStudentForConsent]);
 
   const showMsg = (type, text) => {
     setMessage({ type, text });
@@ -185,6 +220,11 @@ export default function SchoolAdminDashboard() {
     setFees(res.data || []);
   };
 
+  const loadFeeStructures = async () => {
+    const res = await api.get('/fees/structures');
+    setFeeStructures(res.data || []);
+  };
+
   const loadPaymentDetails = async () => {
     try {
       const res = await api.get('/fees/payment-details');
@@ -239,6 +279,7 @@ export default function SchoolAdminDashboard() {
         if (activeTab === 'circulars') await Promise.all([loadSchool(), loadCirculars()]);
         if (activeTab === 'ptmRequests') await Promise.all([loadSchool(), loadPtmRequests()]);
         if (activeTab === 'pickups') await Promise.all([loadSchool(), loadPickupRequests()]);
+        if (activeTab === 'feeStructure') await Promise.all([loadSchool(), loadClasses(), loadFeeStructures()]);
         if (activeTab === 'fees') await Promise.all([loadSchool(), loadStudents(), loadFees(), loadPaymentDetails()]);
         if (activeTab === 'branding') await Promise.all([loadSchool()]);
         if (activeTab === 'compliance') await Promise.all([loadSchool(), loadStudents(), loadAuditLog(0), loadConsents()]);
@@ -264,6 +305,21 @@ export default function SchoolAdminDashboard() {
     setPtmApprovalForm({ meetingDate: '', startTime: '', endTime: '', location: '', adminNotes: '' });
     setShowFeeForm(false);
     setFeeForm({ studentId: '', amount: '', dueDate: '', description: '' });
+    setShowFeeStructureForm(false);
+    setIsEditingFeeStructure(false);
+    setEditingFeeStructureId(null);
+    setFeeStructureForm({
+      classId: '',
+      batchId: '',
+      title: '',
+      description: '',
+      part1Amount: '',
+      part1DueDate: '',
+      part2Amount: '',
+      part2DueDate: '',
+      part3Amount: '',
+      part3DueDate: '',
+    });
     setShowConsentForm(false);
     setConsentForm({ parentId: '', studentId: '', consentType: '', consentText: '', accepted: false });
     setAuditOffset(0);
@@ -623,6 +679,124 @@ export default function SchoolAdminDashboard() {
     }
   };
 
+  const startEditFeeStructure = (feeStructure) => {
+    setIsEditingFeeStructure(true);
+    setEditingFeeStructureId(feeStructure.id);
+    setShowFeeStructureForm(true);
+    
+    const installments = Array.isArray(feeStructure.installments) ? feeStructure.installments : [];
+    setFeeStructureForm({
+      classId: feeStructure.classId || '',
+      batchId: feeStructure.batchId || '',
+      title: feeStructure.title || '',
+      description: feeStructure.description || '',
+      part1Amount: installments[0]?.amount ? String(installments[0].amount) : '',
+      part1DueDate: installments[0]?.dueDate || '',
+      part2Amount: installments[1]?.amount ? String(installments[1].amount) : '',
+      part2DueDate: installments[1]?.dueDate || '',
+      part3Amount: installments[2]?.amount ? String(installments[2].amount) : '',
+      part3DueDate: installments[2]?.dueDate || '',
+    });
+  };
+
+  const handleCreateFeeStructure = async (e) => {
+    e.preventDefault();
+    try {
+      const installmentParts = [
+        { partLabel: 'Part 1', amount: feeStructureForm.part1Amount, dueDate: feeStructureForm.part1DueDate },
+        { partLabel: 'Part 2', amount: feeStructureForm.part2Amount, dueDate: feeStructureForm.part2DueDate },
+        { partLabel: 'Part 3', amount: feeStructureForm.part3Amount, dueDate: feeStructureForm.part3DueDate },
+      ].filter((p) => p.amount && p.dueDate);
+
+      if (!installmentParts.length) {
+        showMsg('error', 'Add at least one valid part amount and due date');
+        return;
+      }
+
+      const payload = {
+        classId: feeStructureForm.classId,
+        batchId: feeStructureForm.batchId || null,
+        title: feeStructureForm.title,
+        description: feeStructureForm.description,
+        installmentParts,
+      };
+
+      let res;
+      if (isEditingFeeStructure && editingFeeStructureId) {
+        res = await api.put(`/fees/structures/${editingFeeStructureId}`, payload);
+        showMsg('success', res.data?.message || 'Fee structure updated');
+      } else {
+        res = await api.post('/fees/structures', payload);
+        showMsg('success', res.data?.message || 'Fee structure created');
+      }
+
+      setShowFeeStructureForm(false);
+      setIsEditingFeeStructure(false);
+      setEditingFeeStructureId(null);
+      setFeeStructureForm({
+        classId: '',
+        batchId: '',
+        title: '',
+        description: '',
+        part1Amount: '',
+        part1DueDate: '',
+        part2Amount: '',
+        part2DueDate: '',
+        part3Amount: '',
+        part3DueDate: '',
+      });
+      loadFeeStructures();
+      loadFees();
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to save fee structure');
+    }
+  };
+
+  const handleDeleteFeeStructure = async (feeStructureId, title) => {
+    if (!window.confirm(`Delete fee structure "${title}"? This will not remove existing reminders.`)) return;
+    try {
+      await api.delete(`/fees/structures/${feeStructureId}`);
+      showMsg('success', 'Fee structure deleted');
+      loadFeeStructures();
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to delete fee structure');
+    }
+  };
+
+  const loadStudentFeeStructures = async (studentId) => {
+    try {
+      const res = await api.get(`/schooladmin/student/${studentId}/fee-structures`);
+      setStudentFeeStructures(res.data || []);
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to load fee structures');
+    }
+  };
+
+  const handleShowStudentFeeStructures = (student) => {
+    setSelectedStudentForFees(student);
+    setShowStudentFeeStructuresModal(true);
+    loadStudentFeeStructures(student.id);
+  };
+
+  const handleSendStudentFeeReminder = async (feeStructureId, partLabel) => {
+    if (!selectedStudentForFees) return;
+    const childName = `${selectedStudentForFees.firstName || ''} ${selectedStudentForFees.lastName || ''}`.trim() || 'the child';
+    const key = `${selectedStudentForFees.id}-${feeStructureId}-${partLabel}`;
+    setSendingStudentFeeReminder(key);
+    try {
+      await api.post(`/schooladmin/student/${selectedStudentForFees.id}/send-fee-reminder`, { feeStructureId, partLabel });
+      showMsg('success', `Reminder sent for ${childName} - ${partLabel}`);
+      setShowStudentFeeStructuresModal(false);
+      setSelectedStudentForFees(null);
+      setStudentFeeStructures([]);
+      loadFees();
+    } catch (err) {
+      showMsg('error', err.response?.data?.error || 'Unable to send reminder');
+    } finally {
+      setSendingStudentFeeReminder(null);
+    }
+  };
+
   const handleUpdateFeeStatus = async (feeId, status) => {
     try {
       await api.put('/fees/' + feeId, { status });
@@ -730,6 +904,16 @@ export default function SchoolAdminDashboard() {
     }
   };
 
+  const handleConsentStudentChange = (studentId) => {
+    const student = students.find((entry) => entry.id === studentId) || null;
+    const parentIds = Array.isArray(student?.parentIds) ? student.parentIds : [];
+    setConsentForm((prev) => ({
+      ...prev,
+      studentId,
+      parentId: parentIds[0] || '',
+    }));
+  };
+
   const handleDeleteConsent = async (id) => {
     if (!window.confirm('Delete this consent record?')) return;
     try {
@@ -759,6 +943,7 @@ export default function SchoolAdminDashboard() {
         classes: classes.length,
         enrollment: students.length,
         circulars: circulars.length,
+        feeStructure: feeStructures.length,
         fees: fees.filter((f) => f.status === 'pending' || f.status === 'overdue').length,
         ptmRequests: pendingPtmRequests,
         pickups: pendingPickups,
@@ -1221,13 +1406,64 @@ export default function SchoolAdminDashboard() {
                             <td>{s.class?.name} {s.class?.section || ''}</td>
                             <td>{s.batch?.shiftName || '-'}</td>
                             <td>{Array.isArray(s.documents) && s.documents.length > 0 ? <span className="text-xs text-green-600 font-medium">{s.documents.length} file(s)</span> : <span className="text-xs text-gray-400">None</span>}</td>
-                            <td><button className="btn btn-sm btn-outline" onClick={() => startEditEnrollment(s)}>Edit</button></td>
+                            <td><div className="flex gap-1"><button className="btn btn-sm btn-outline" onClick={() => startEditEnrollment(s)}>Edit</button><button className="btn btn-sm btn-outline" onClick={() => handleShowStudentFeeStructures(s)}>Fees</button></div></td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
                 )}
+              </div>
+            )}
+
+            {showStudentFeeStructuresModal && selectedStudentForFees && (
+              <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                <div className="bg-white rounded-2xl max-w-2xl w-full max-h-96 overflow-y-auto shadow-2xl">
+                  <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex items-center justify-between">
+                    <h3 className="font-semibold text-lg text-gray-800">Fee Structures - {selectedStudentForFees.firstName} {selectedStudentForFees.lastName}</h3>
+                    <button type="button" onClick={() => { setShowStudentFeeStructuresModal(false); setSelectedStudentForFees(null); }} className="text-gray-400 hover:text-gray-600"><FaTimes className="text-xl" /></button>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    {studentFeeStructures.length === 0 ? (
+                      <p className="text-center text-gray-500 py-6">No fee structures assigned to this student.</p>
+                    ) : (
+                      studentFeeStructures.map((fs) => {
+                        const parts = Array.isArray(fs.installments) ? fs.installments : [];
+                        return (
+                          <div key={fs.id} className="border border-slate-200 rounded-xl p-3 space-y-3">
+                            <div>
+                              <p className="font-semibold text-gray-800">{fs.title}</p>
+                              <p className="text-xs text-gray-600">Total: ₹{parseFloat(fs.totalAmount || 0).toFixed(2)}</p>
+                            </div>
+                            {parts.length > 0 && (
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                                {parts.map((p, idx) => {
+                                  const key = `${selectedStudentForFees.id}-${fs.id}-${p.partLabel || `Part ${idx + 1}`}`;
+                                  const isSending = sendingStudentFeeReminder === key;
+                                  return (
+                                    <div key={`${fs.id}-${idx}`} className="rounded-lg border border-slate-200 bg-slate-50 p-2 space-y-2">
+                                      <p className="text-xs font-semibold text-slate-600">{p.partLabel || `Part ${idx + 1}`}</p>
+                                      <p className="font-bold text-slate-800 text-sm">₹{parseFloat(p.amount || 0).toFixed(2)}</p>
+                                      <p className="text-xs text-slate-500">Due: {p.dueDate ? new Date(p.dueDate).toLocaleDateString() : '-'}</p>
+                                      <button 
+                                        type="button" 
+                                        onClick={() => handleSendStudentFeeReminder(fs.id, p.partLabel || `Part ${idx + 1}`)}
+                                        disabled={isSending}
+                                        className="btn btn-xs btn-outline w-full"
+                                      >
+                                        {isSending ? 'Sending...' : 'Send Reminder'}
+                                      </button>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1362,6 +1598,121 @@ export default function SchoolAdminDashboard() {
                         </div>
                       </div>
                     ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {activeTab === 'feeStructure' && (
+              <div className="space-y-6">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                  <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2"><FaMoneyBillWave className="text-indigo-600" /> Fee Structure</h2>
+                  <div className="flex gap-2">
+                    {!showFeeStructureForm && (
+                      <button type="button" onClick={() => setShowFeeStructureForm(true)} className="btn btn-primary btn-sm flex items-center gap-2"><FaPlus /> Add Fee Structure</button>
+                    )}
+                  </div>
+                </div>
+
+                {showFeeStructureForm && (
+                  <div className="card border border-indigo-100 bg-indigo-50/30 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-gray-800">{isEditingFeeStructure ? 'Edit Fee Structure' : 'Create Batch-wise Fee Structure'}</h3>
+                      <button type="button" onClick={() => { setShowFeeStructureForm(false); setIsEditingFeeStructure(false); setEditingFeeStructureId(null); }} className="text-gray-400 hover:text-gray-600"><FaTimes /></button>
+                    </div>
+                    <form onSubmit={handleCreateFeeStructure} className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <select className="input" value={feeStructureForm.classId} onChange={(e) => setFeeStructureForm({ ...feeStructureForm, classId: e.target.value, batchId: '' })} required>
+                        <option value="">Select Class</option>
+                        {classes.map((c) => <option key={c.id} value={c.id}>{c.name} {c.section || ''}</option>)}
+                      </select>
+                      <select className="input" value={feeStructureForm.batchId} onChange={(e) => setFeeStructureForm({ ...feeStructureForm, batchId: e.target.value })}>
+                        <option value="">All Batches in Class</option>
+                        {(selectedClassForFeeStructure?.batches || []).map((b) => (
+                          <option key={b.id} value={b.id}>{b.shiftName} ({b.startTime}-{b.endTime})</option>
+                        ))}
+                      </select>
+
+                      <input className="input md:col-span-2" placeholder="Fee Structure Name (e.g. Academic Year 2026-27)" value={feeStructureForm.title} onChange={(e) => setFeeStructureForm({ ...feeStructureForm, title: e.target.value })} required />
+                      <input className="input md:col-span-2" placeholder="Description (optional)" value={feeStructureForm.description} onChange={(e) => setFeeStructureForm({ ...feeStructureForm, description: e.target.value })} />
+
+                      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="bg-white rounded-xl border border-indigo-100 p-3 space-y-2">
+                          <p className="text-xs font-semibold text-indigo-700">Part 1</p>
+                          <input className="input" type="number" step="0.01" min="0" placeholder="Amount" value={feeStructureForm.part1Amount} onChange={(e) => setFeeStructureForm({ ...feeStructureForm, part1Amount: e.target.value })} />
+                          <input className="input" type="date" value={feeStructureForm.part1DueDate} onChange={(e) => setFeeStructureForm({ ...feeStructureForm, part1DueDate: e.target.value })} />
+                        </div>
+                        <div className="bg-white rounded-xl border border-indigo-100 p-3 space-y-2">
+                          <p className="text-xs font-semibold text-indigo-700">Part 2</p>
+                          <input className="input" type="number" step="0.01" min="0" placeholder="Amount" value={feeStructureForm.part2Amount} onChange={(e) => setFeeStructureForm({ ...feeStructureForm, part2Amount: e.target.value })} />
+                          <input className="input" type="date" value={feeStructureForm.part2DueDate} onChange={(e) => setFeeStructureForm({ ...feeStructureForm, part2DueDate: e.target.value })} />
+                        </div>
+                        <div className="bg-white rounded-xl border border-indigo-100 p-3 space-y-2">
+                          <p className="text-xs font-semibold text-indigo-700">Part 3</p>
+                          <input className="input" type="number" step="0.01" min="0" placeholder="Amount" value={feeStructureForm.part3Amount} onChange={(e) => setFeeStructureForm({ ...feeStructureForm, part3Amount: e.target.value })} />
+                          <input className="input" type="date" value={feeStructureForm.part3DueDate} onChange={(e) => setFeeStructureForm({ ...feeStructureForm, part3DueDate: e.target.value })} />
+                        </div>
+                      </div>
+
+                      <div className="md:col-span-2 rounded-xl bg-emerald-50 border border-emerald-100 p-3">
+                        <p className="text-xs text-emerald-700">Total Amount</p>
+                        <p className="text-xl font-bold text-emerald-800">
+                          ₹{(
+                            (parseFloat(feeStructureForm.part1Amount || 0) || 0) +
+                            (parseFloat(feeStructureForm.part2Amount || 0) || 0) +
+                            (parseFloat(feeStructureForm.part3Amount || 0) || 0)
+                          ).toFixed(2)}
+                        </p>
+                      </div>
+
+                      <div className="md:col-span-2 flex gap-2">
+                        <button type="submit" className="btn btn-primary">{isEditingFeeStructure ? 'Update Structure' : 'Save Structure & Apply to Children'}</button>
+                        <button type="button" className="btn btn-outline" onClick={() => { setShowFeeStructureForm(false); setIsEditingFeeStructure(false); setEditingFeeStructureId(null); }}>Cancel</button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {feeStructures.length === 0 && !showFeeStructureForm ? (
+                  <div className="card text-center py-10 text-gray-500">No fee structures yet. Create Part 1 / Part 2 / Part 3 with due dates.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {feeStructures.map((fs) => {
+                      const parts = Array.isArray(fs.installments) ? fs.installments : [];
+                      return (
+                        <div key={fs.id} className="card space-y-3">
+                          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-800">{fs.title}</p>
+                              <p className="text-sm text-gray-600">{fs.scopeLabel}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-xs text-gray-500">Total Amount</p>
+                              <p className="font-bold text-gray-900">₹{parseFloat(fs.totalAmount || fs.amount || 0).toFixed(2)}</p>
+                            </div>
+                          </div>
+
+                          {parts.length > 0 && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                              {parts.map((p, idx) => (
+                                <div key={`${fs.id}-${idx}`} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                                  <p className="text-xs font-semibold text-slate-600">{p.partLabel || `Part ${idx + 1}`}</p>
+                                  <p className="font-bold text-slate-800">₹{parseFloat(p.amount || 0).toFixed(2)}</p>
+                                  <p className="text-xs text-slate-500">Due: {p.dueDate ? new Date(p.dueDate).toLocaleDateString() : '-'}</p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className="flex items-center justify-between">
+                            <p className="text-xs text-gray-500">Assigned to students: {fs.reminderCount || 0}</p>
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => startEditFeeStructure(fs)} className="btn btn-xs btn-outline">Edit</button>
+                              <button type="button" onClick={() => handleDeleteFeeStructure(fs.id, fs.title)} className="btn btn-xs btn-outline btn-error">Delete</button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -1690,11 +2041,14 @@ export default function SchoolAdminDashboard() {
                           <button type="button" onClick={() => setShowConsentForm(false)} className="text-gray-400 hover:text-gray-600"><FaTimes /></button>
                         </div>
                         <form onSubmit={handleCreateConsent} className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          <select className="input" value={consentForm.studentId} onChange={(e) => setConsentForm({ ...consentForm, studentId: e.target.value })} required>
+                          <select className="input" value={consentForm.studentId} onChange={(e) => handleConsentStudentChange(e.target.value)} required>
                             <option value="">Select Student</option>
                             {students.map((s) => <option key={s.id} value={s.id}>{s.firstName} {s.lastName}</option>)}
                           </select>
-                          <input className="input" placeholder="Parent ID (UUID)" value={consentForm.parentId} onChange={(e) => setConsentForm({ ...consentForm, parentId: e.target.value })} required />
+                          <select className="input" value={consentForm.parentId} onChange={(e) => setConsentForm({ ...consentForm, parentId: e.target.value })} required disabled={!consentForm.studentId || consentParentOptions.length === 0}>
+                            <option value="">{consentForm.studentId ? 'Select Parent' : 'Select Student First'}</option>
+                            {consentParentOptions.map((parent) => <option key={parent.id} value={parent.id}>{parent.label} ({parent.id.slice(0, 8)}...)</option>)}
+                          </select>
                           <input className="input" placeholder="Consent type (e.g. photo_sharing, field_trip)" value={consentForm.consentType} onChange={(e) => setConsentForm({ ...consentForm, consentType: e.target.value })} required />
                           <label className="flex items-center gap-2 text-sm text-gray-700 px-3 border border-gray-200 rounded-xl bg-gray-50">
                             <input type="checkbox" checked={consentForm.accepted} onChange={(e) => setConsentForm({ ...consentForm, accepted: e.target.checked })} />
@@ -1717,7 +2071,7 @@ export default function SchoolAdminDashboard() {
                           <div key={c.id} className="card flex items-start justify-between gap-3">
                             <div className="space-y-1">
                               <div className="font-medium text-gray-800">{c.studentFirst} {c.studentLast}</div>
-                              <div className="text-sm text-gray-600">Parent: {c.parentFirst} {c.parentLast} · <span className="text-gray-400">{c.parentEmail}</span></div>
+                              <div className="text-sm text-gray-600">Parent: {`${c.parentFirst || ''} ${c.parentLast || ''}`.trim() || c.parentId || 'Unknown Parent'} · <span className="text-gray-400">{c.parentEmail || 'No email linked'}</span></div>
                               <div className="flex items-center gap-2 flex-wrap text-xs">
                                 <span className="font-medium text-gray-700 capitalize">{(c.consentType || '').replace(/_/g, ' ')}</span>
                                 <span className={`px-2 py-0.5 rounded-full font-semibold ${c.accepted ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>

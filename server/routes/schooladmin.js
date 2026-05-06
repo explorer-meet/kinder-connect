@@ -9,6 +9,70 @@ const router = express.Router();
 const getCurrentSchoolUser = async (userId) =>
   queryOne('SELECT id, schoolId, role FROM `user` WHERE id = ? LIMIT 1', [userId]);
 
+const parseInstallments = (raw) => {
+  if (Array.isArray(raw)) return raw;
+  if (raw && typeof raw === 'object') return [raw].flat();
+  try { return JSON.parse(raw || '[]'); } catch (_) { return []; }
+};
+
+const getOrCreateStudentFeeStructures = async ({ studentId, schoolId, classId, batchId }) => {
+  let feeStructures = await query(
+    `SELECT fs.*, sfs.id AS assignmentId
+     FROM studentfeestructure sfs
+     JOIN feestructure fs ON CONVERT(fs.id USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sfs.feeStructureId USING utf8mb4) COLLATE utf8mb4_unicode_ci
+     WHERE CONVERT(sfs.studentId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ?
+       AND CONVERT(sfs.schoolId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ?
+       AND sfs.isActive = 1
+       AND fs.isActive = 1
+     ORDER BY fs.createdAt DESC`,
+    [studentId, schoolId]
+  );
+
+  const applicableStructures = await query(
+    `SELECT fs.*
+     FROM feestructure fs
+     WHERE CONVERT(fs.schoolId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ?
+       AND CONVERT(fs.classId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ?
+       AND fs.isActive = 1
+       AND (
+         fs.batchId IS NULL
+         OR fs.batchId = ''
+         OR CONVERT(fs.batchId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ?
+       )
+     ORDER BY fs.createdAt DESC`,
+    [schoolId, classId, batchId || '']
+  );
+
+  const assignedIds = new Set(feeStructures.map((row) => String(row.id)));
+  for (const structure of applicableStructures) {
+    if (assignedIds.has(String(structure.id))) continue;
+    const assignmentId = newId();
+    await query(
+      'INSERT INTO studentfeestructure (id, studentId, feeStructureId, schoolId, isActive, createdAt, updatedAt) VALUES (?, ?, ?, ?, 1, NOW(), NOW())',
+      [assignmentId, studentId, structure.id, schoolId]
+    ).catch(() => {});
+  }
+
+  if (applicableStructures.length > feeStructures.length) {
+    feeStructures = await query(
+      `SELECT fs.*, sfs.id AS assignmentId
+       FROM studentfeestructure sfs
+       JOIN feestructure fs ON CONVERT(fs.id USING utf8mb4) COLLATE utf8mb4_unicode_ci = CONVERT(sfs.feeStructureId USING utf8mb4) COLLATE utf8mb4_unicode_ci
+       WHERE CONVERT(sfs.studentId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ?
+         AND CONVERT(sfs.schoolId USING utf8mb4) COLLATE utf8mb4_unicode_ci = ?
+         AND sfs.isActive = 1
+         AND fs.isActive = 1
+       ORDER BY fs.createdAt DESC`,
+      [studentId, schoolId]
+    );
+  }
+
+  return feeStructures.map((fs) => ({
+    ...fs,
+    installments: parseInstallments(fs.installments),
+  }));
+};
+
 const upsertParentByEmail = async ({ email, firstName, lastName, phone, schoolId, fallbackFirstName, fallbackLastName }) => {
   const normalizedEmail = email ? String(email).trim().toLowerCase() : '';
   if (!normalizedEmail) return { parentUser: null, accountInfo: null };
@@ -583,6 +647,73 @@ router.patch('/ptm-request/:requestId', auth, authorize(['school_admin']), async
   }
 });
 
+// Incident escalation workflow for school admins
+router.get('/incidents/escalations', auth, authorize(['school_admin']), async (req, res) => {
+  try {
+    const user = await getCurrentSchoolUser(req.userId);
+    if (!user?.schoolId) return res.status(400).json({ error: 'School admin is not linked to a school' });
+
+    const rows = await query(
+      `SELECT i.*, s.firstName AS studentFirstName, s.lastName AS studentLastName,
+              t.firstName AS teacherFirstName, t.lastName AS teacherLastName
+       FROM incidentreport i
+       JOIN student s ON i.studentId = s.id
+       LEFT JOIN \`user\` t ON i.teacherId = t.id
+       WHERE s.schoolId = ? AND i.escalationLevel <> 'none'
+       ORDER BY i.updatedAt DESC`,
+      [user.schoolId]
+    );
+
+    res.json(rows.map((r) => ({
+      ...r,
+      studentName: `${r.studentFirstName || ''} ${r.studentLastName || ''}`.trim(),
+      teacherName: `${r.teacherFirstName || ''} ${r.teacherLastName || ''}`.trim() || 'Teacher',
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.patch('/incident/:incidentId/escalation', auth, authorize(['school_admin']), async (req, res) => {
+  try {
+    const { escalationStatus, escalationNotes, resolutionSummary } = req.body;
+    const validStatus = ['open', 'in_progress', 'resolved', 'closed'];
+    if (escalationStatus && !validStatus.includes(escalationStatus)) {
+      return res.status(400).json({ error: 'Invalid escalationStatus' });
+    }
+
+    const sets = [];
+    const vals = [];
+    if (escalationStatus !== undefined) {
+      sets.push('escalationStatus = ?');
+      vals.push(escalationStatus);
+      if (escalationStatus === 'resolved' || escalationStatus === 'closed') {
+        sets.push('resolvedAt = NOW()');
+      }
+    }
+    if (escalationNotes !== undefined) {
+      sets.push('escalationNotes = ?');
+      vals.push(escalationNotes);
+    }
+    if (resolutionSummary !== undefined) {
+      sets.push('resolutionSummary = ?');
+      vals.push(resolutionSummary);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'No fields to update' });
+
+    sets.push('updatedAt = NOW()');
+    vals.push(req.params.incidentId);
+
+    await query(`UPDATE incidentreport SET ${sets.join(', ')} WHERE id = ?`, vals);
+    const incident = await queryOne('SELECT * FROM incidentreport WHERE id = ? LIMIT 1', [req.params.incidentId]);
+    if (!incident) return res.status(404).json({ error: 'Incident not found' });
+
+    res.json({ message: 'Escalation updated', incident });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── Branding helpers ──────────────────────────────────────────────────────────
 
 const logAudit = async ({ schoolId, actorId, actorName, actorRole, action, targetType = '', targetId = '', metadata = null, ip = '' }) => {
@@ -638,6 +769,145 @@ router.put('/school/branding', auth, authorize(['school_admin']), async (req, re
     res.json(updated);
   } catch (err) {
     console.error('PUT /school/branding error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /student/:studentId/fee-structures — get fee structures assigned to a student ────
+router.get('/student/:studentId/fee-structures', auth, authorize(['school_admin']), async (req, res) => {
+  try {
+    const user = await getCurrentSchoolUser(req.userId);
+    if (!user?.schoolId) return res.status(400).json({ error: 'No school linked' });
+
+    const { studentId } = req.params;
+
+    const student = await queryOne(
+      'SELECT id, schoolId, classId, batchId FROM student WHERE id = ? LIMIT 1',
+      [studentId]
+    );
+    if (!student || String(student.schoolId) !== String(user.schoolId)) {
+      return res.status(404).json({ error: 'Student not found in your school' });
+    }
+
+    const feeStructures = await getOrCreateStudentFeeStructures({
+      studentId,
+      schoolId: user.schoolId,
+      classId: student.classId,
+      batchId: student.batchId,
+    });
+
+    res.json(feeStructures);
+  } catch (err) {
+    console.error('GET /student/:studentId/fee-structures error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /student/:studentId/send-fee-reminder — send reminder for specific part ────
+router.post('/student/:studentId/send-fee-reminder', auth, authorize(['school_admin']), async (req, res) => {
+  try {
+    const user = await getCurrentSchoolUser(req.userId);
+    if (!user?.schoolId) return res.status(400).json({ error: 'No school linked' });
+
+    const { studentId } = req.params;
+    const { feeStructureId, partLabel } = req.body;
+
+    if (!feeStructureId || !partLabel) {
+      return res.status(400).json({ error: 'feeStructureId and partLabel are required' });
+    }
+
+    const student = await queryOne(
+      'SELECT id, schoolId, classId, batchId, firstName, lastName FROM student WHERE id = ? LIMIT 1',
+      [studentId]
+    );
+    if (!student || String(student.schoolId) !== String(user.schoolId)) {
+      return res.status(404).json({ error: 'Student not found' });
+    }
+
+    const feeStructure = await queryOne(
+      'SELECT id, schoolId, title, installments FROM feestructure WHERE id = ? LIMIT 1',
+      [feeStructureId]
+    );
+    if (!feeStructure || String(feeStructure.schoolId) !== String(user.schoolId)) {
+      return res.status(404).json({ error: 'Fee structure not found' });
+    }
+
+    const assignedStructures = await getOrCreateStudentFeeStructures({
+      studentId,
+      schoolId: user.schoolId,
+      classId: student.classId,
+      batchId: student.batchId,
+    });
+    const assignment = assignedStructures.find((row) => String(row.id) === String(feeStructureId));
+    if (!assignment) {
+      return res.status(404).json({ error: 'Student is not assigned to this fee structure' });
+    }
+
+    // Parse installments and find the part
+    const installments = parseInstallments(feeStructure.installments);
+
+    const part = installments.find((p) => String(p.partLabel || '') === String(partLabel));
+    if (!part) return res.status(404).json({ error: `Part "${partLabel}" not found` });
+
+    // Check if reminder exists, if not create it
+    let reminder = await queryOne(
+      'SELECT * FROM feereminder WHERE studentId = ? AND feeStructureId = ? AND dueDate = ? LIMIT 1',
+      [studentId, feeStructureId, part.dueDate]
+    );
+
+    if (!reminder) {
+      const reminderId = newId();
+      const description = `${feeStructure.title} - ${partLabel}`;
+      await query(
+        'INSERT INTO feereminder (id, schoolId, studentId, feeStructureId, amount, dueDate, description, status, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, \'pending\', NOW(), NOW())',
+        [reminderId, user.schoolId, studentId, feeStructureId, part.amount, part.dueDate, description]
+      );
+      reminder = { id: reminderId, schoolId: user.schoolId, studentId, amount: part.amount, dueDate: part.dueDate };
+    }
+
+    res.json({ success: true, queued: true, reminderId: reminder.id, partLabel });
+
+    setImmediate(async () => {
+      try {
+        const parentLink = await queryOne(
+          "SELECT u.email, u.firstName FROM `user` u JOIN student s ON s.id = ? WHERE u.role = 'parent' AND JSON_CONTAINS(s.parentIds, JSON_QUOTE(u.id)) LIMIT 1",
+          [studentId]
+        );
+
+        const school = await queryOne('SELECT name FROM school WHERE id = ? LIMIT 1', [user.schoolId]);
+        const schoolName = school?.name || 'Your School';
+        const mailResult = parentLink?.email
+          ? await sendMailSafe({
+            to: parentLink.email,
+            subject: `Fee Reminder — ${student.firstName} ${student.lastName} (${partLabel}) | ${schoolName}`,
+            text: `Hello ${parentLink.firstName || 'Parent'},\n\nFee due reminder for ${student.firstName} ${student.lastName}.\n${feeStructure.title} - ${partLabel}\nAmount: INR ${Number(part.amount || 0).toFixed(2)}\nDue date: ${new Date(part.dueDate).toDateString()}\n\nThank you,\n${schoolName}`,
+          })
+          : { sent: false, reason: 'missing_parent_email' };
+
+        if (mailResult?.sent) {
+          await query(
+            'UPDATE feereminder SET reminderSentAt = NOW(), updatedAt = NOW() WHERE id = ?',
+            [reminder.id]
+          );
+        }
+
+        await logAudit({
+          schoolId: user.schoolId,
+          actorId: user.id,
+          actorName: 'School Admin',
+          actorRole: user.role,
+          action: 'student_fee_reminder_queued',
+          targetType: 'feereminder',
+          targetId: reminder.id,
+          metadata: { studentId, feeStructureId, partLabel, mailSent: Boolean(mailResult?.sent), reason: mailResult?.reason || null },
+          ip: req.ip,
+        });
+      } catch (backgroundErr) {
+        console.error('Background student fee reminder error:', backgroundErr);
+      }
+    });
+  } catch (err) {
+    console.error('POST /student/:studentId/send-fee-reminder error:', err);
     res.status(500).json({ error: err.message });
   }
 });

@@ -42,8 +42,60 @@ const createTables = async () => {
   await addColumnIfMissing('feereminder', 'transactionId', 'VARCHAR(200) NULL');
   await addColumnIfMissing('feereminder', 'paymentNote', 'TEXT NULL');
   await addColumnIfMissing('feereminder', 'paymentSubmittedAt', 'DATETIME NULL');
+  await addColumnIfMissing('feereminder', 'feeStructureId', 'VARCHAR(64) NULL');
   // Alter status column to allow 'payment_submitted'
   await query(`ALTER TABLE feereminder MODIFY COLUMN status VARCHAR(30) NOT NULL DEFAULT 'pending'`).catch(() => {});
+
+  // Fee structure (class/batch-wise fee definition)
+  await query(`
+    CREATE TABLE IF NOT EXISTS feestructure (
+      id            VARCHAR(64)   NOT NULL PRIMARY KEY,
+      schoolId      VARCHAR(64)   NOT NULL,
+      classId       VARCHAR(64)   NOT NULL,
+      batchId       VARCHAR(64)   NULL,
+      title         VARCHAR(200)  NOT NULL,
+      amount        DECIMAL(10,2) NOT NULL DEFAULT 0,
+      totalAmount   DECIMAL(10,2) NOT NULL DEFAULT 0,
+      dueDate       DATE          NOT NULL,
+      installments  JSON          NULL,
+      description   VARCHAR(500)  DEFAULT '',
+      isActive      TINYINT(1)    NOT NULL DEFAULT 1,
+      createdBy     VARCHAR(64)   NULL,
+      createdAt     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt     DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      KEY idx_feestructure_school (schoolId),
+      KEY idx_feestructure_class (classId),
+      KEY idx_feestructure_batch (batchId)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+  await addColumnIfMissing('feestructure', 'totalAmount', 'DECIMAL(10,2) NOT NULL DEFAULT 0');
+  await addColumnIfMissing('feestructure', 'installments', 'JSON NULL');
+
+  // Student fee structure assignments (tracks which students are linked to which fee structures)
+  await query(`
+    CREATE TABLE IF NOT EXISTS studentfeestructure (
+      id              VARCHAR(64)   NOT NULL PRIMARY KEY,
+      studentId       VARCHAR(64)   NOT NULL,
+      feeStructureId  VARCHAR(64)   NOT NULL,
+      schoolId        VARCHAR(64)   NOT NULL,
+      isActive        TINYINT(1)    NOT NULL DEFAULT 1,
+      createdAt       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updatedAt       DATETIME      NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uk_student_feestructure (studentId, feeStructureId),
+      KEY idx_student_id (studentId),
+      KEY idx_feestructure_id (feeStructureId),
+      KEY idx_school_id (schoolId)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  `);
+
+  // Incident escalation workflow fields
+  await addColumnIfMissing('incidentreport', 'escalationLevel', "VARCHAR(20) NOT NULL DEFAULT 'none'");
+  await addColumnIfMissing('incidentreport', 'escalationStatus', "VARCHAR(30) NOT NULL DEFAULT 'open'");
+  await addColumnIfMissing('incidentreport', 'escalationNotes', 'TEXT NULL');
+  await addColumnIfMissing('incidentreport', 'escalatedAt', 'DATETIME NULL');
+  await addColumnIfMissing('incidentreport', 'escalatedById', 'VARCHAR(64) NULL');
+  await addColumnIfMissing('incidentreport', 'resolvedAt', 'DATETIME NULL');
+  await addColumnIfMissing('incidentreport', 'resolutionSummary', 'TEXT NULL');
 
   // School payment details
   await query(`

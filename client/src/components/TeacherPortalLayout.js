@@ -8,6 +8,12 @@ import {
   FaGraduationCap, FaExclamationTriangle, FaCalendarAlt, FaChartBar, FaUser, FaStethoscope,
 } from 'react-icons/fa';
 
+const TEACHER_PILLS = [
+  { emoji: '✏️', label: 'Classroom sparkle' },
+  { emoji: '🪄', label: 'Smooth routines' },
+  { emoji: '🎵', label: 'Happy learning' },
+];
+
 const NAV_INLINE = [
   { id: 'home',      label: 'Home',            icon: FaHome,      path: '/teacher/dashboard' },
   { id: 'homework',  label: 'Homework & Notes', icon: FaLightbulb, path: '/teacher/dashboard', state: { section: 'homework' } },
@@ -96,14 +102,19 @@ export default function TeacherPortalLayout({ title, children }) {
   }, []);
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="portal-shell flex h-screen overflow-hidden">
+      <div className="portal-sprinkles hidden lg:block" aria-hidden="true">
+        <div className="portal-sprinkle portal-sprinkle-1"><span>🖍️</span><span>Creative teaching</span></div>
+        <div className="portal-sprinkle portal-sprinkle-2"><span>🎶</span><span>Rhythm in class</span></div>
+        <div className="portal-sprinkle portal-sprinkle-3"><span>🌈</span><span>Bright progress</span></div>
+      </div>
       {sidebarOpen && (
         <div className="fixed inset-0 z-30 bg-black/40 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Sidebar */}
       <aside className={`
-        fixed inset-y-0 left-0 z-40 w-[280px] bg-white shadow-xl flex flex-col
+        fixed inset-y-0 left-0 z-40 w-[280px] bg-white/88 backdrop-blur-xl shadow-xl flex flex-col
         transform transition-transform duration-300
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:relative lg:translate-x-0 lg:shadow-none lg:border-r lg:border-gray-100
@@ -140,6 +151,11 @@ export default function TeacherPortalLayout({ title, children }) {
                 <p className="text-indigo-100/90 text-xs capitalize mt-1">Teacher</p>
               </div>
             </div>
+          </div>
+          <div className="portal-emoji-row mt-3">
+            {TEACHER_PILLS.map((pill) => (
+              <span key={pill.label} className="portal-emoji-pill"><span>{pill.emoji}</span><span>{pill.label}</span></span>
+            ))}
           </div>
         </div>
 
@@ -213,9 +229,21 @@ export default function TeacherPortalLayout({ title, children }) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {/* Scrollable content */}
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
-          {children}
+        <header className="portal-header-glass px-4 py-3 flex items-center gap-3 shrink-0">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-gray-500 hover:text-gray-700 p-1">
+            <FaChevronRight size={18} className="rotate-180" />
+          </button>
+          {logoUrl ? (
+            <img src={logoUrl} alt="School logo" className="w-10 h-10 rounded-xl object-contain border border-gray-200 bg-white p-1 shrink-0" />
+          ) : null}
+          <div className="flex-1 min-w-0">
+            <h1 className="font-bold text-gray-800 text-base truncate">{title}</h1>
+            <p className="text-xs text-gray-500 truncate mt-0.5">{tagline}</p>
+          </div>
+          <div className="hidden md:inline-flex portal-hero-chip"><span>🍎</span><span>Teach with calm energy</span></div>
+        </header>
+        <main className="portal-main-frame flex-1 overflow-y-auto p-4 lg:p-6">
+          <div className="portal-main-inner">{children}</div>
         </main>
       </div>
     </div>

@@ -16,11 +16,18 @@ import {
   FaShieldAlt,
 } from 'react-icons/fa';
 
+const PLAYFUL_PILLS = [
+  { emoji: '🧸', label: 'Warm welcome' },
+  { emoji: '🌈', label: 'Bright classrooms' },
+  { emoji: '🖍️', label: 'Creative flow' },
+];
+
 const NAV_ITEMS = [
   { id: 'staff', label: 'Staff', icon: FaUsers },
   { id: 'classes', label: 'Classes & Batches', icon: FaGraduationCap },
   { id: 'enrollment', label: 'Enrollment', icon: FaChild },
   { id: 'circulars', label: 'Circulars', icon: FaBullhorn },
+  { id: 'feeStructure', label: 'Fee Structure', icon: FaMoneyBillWave },
   { id: 'fees', label: 'Fee Reminders', icon: FaMoneyBillWave },
   { id: 'ptmRequests', label: 'PTM Requests', icon: FaCalendarAlt },
   { id: 'pickups', label: 'Pickup Requests', icon: FaShuttleVan },
@@ -33,6 +40,7 @@ const ICON_STYLES = {
   classes: { tone: 'text-indigo-500', soft: 'bg-indigo-50' },
   enrollment: { tone: 'text-emerald-500', soft: 'bg-emerald-50' },
   circulars: { tone: 'text-violet-500', soft: 'bg-violet-50' },
+  feeStructure: { tone: 'text-indigo-600', soft: 'bg-indigo-50' },
   fees: { tone: 'text-green-600', soft: 'bg-green-50' },
   ptmRequests: { tone: 'text-amber-500', soft: 'bg-amber-50' },
   pickups: { tone: 'text-amber-500', soft: 'bg-amber-50' },
@@ -80,7 +88,12 @@ export default function SchoolAdminPortalLayout({
   };
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="portal-shell flex h-screen overflow-hidden">
+      <div className="portal-sprinkles hidden lg:block" aria-hidden="true">
+        <div className="portal-sprinkle portal-sprinkle-1"><span>🎈</span><span>Happy halls</span></div>
+        <div className="portal-sprinkle portal-sprinkle-2"><span>🪁</span><span>Playful routines</span></div>
+        <div className="portal-sprinkle portal-sprinkle-3"><span>🧩</span><span>Smart admin flow</span></div>
+      </div>
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-30 bg-black/40 lg:hidden"
@@ -90,7 +103,7 @@ export default function SchoolAdminPortalLayout({
 
       <aside
         className={`
-        fixed inset-y-0 left-0 z-40 w-[280px] bg-white shadow-xl flex flex-col
+        fixed inset-y-0 left-0 z-40 w-[280px] bg-white/88 backdrop-blur-xl shadow-xl flex flex-col
         transform transition-transform duration-300
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
         lg:relative lg:translate-x-0 lg:shadow-none lg:border-r lg:border-gray-100
@@ -130,6 +143,11 @@ export default function SchoolAdminPortalLayout({
                 <p className="text-emerald-100/90 text-xs capitalize mt-1">School Admin</p>
               </div>
             </div>
+          </div>
+          <div className="portal-emoji-row mt-3">
+            {PLAYFUL_PILLS.map((pill) => (
+              <span key={pill.label} className="portal-emoji-pill"><span>{pill.emoji}</span><span>{pill.label}</span></span>
+            ))}
           </div>
         </div>
 
@@ -184,7 +202,7 @@ export default function SchoolAdminPortalLayout({
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 shrink-0">
+        <header className="portal-header-glass px-4 py-3 flex items-center gap-3 shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden text-gray-500 hover:text-gray-700 p-1"
@@ -198,6 +216,7 @@ export default function SchoolAdminPortalLayout({
             <h1 className="font-bold text-gray-800 text-base truncate">{title}</h1>
             <p className="text-xs text-gray-500 truncate mt-0.5">{tagline}</p>
           </div>
+          <div className="hidden md:inline-flex portal-hero-chip"><span>📚</span><span>Care meets coordination</span></div>
           <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
             style={{ background: `linear-gradient(135deg, ${primary}, ${secondary})` }}>
             {user?.firstName?.[0]}
@@ -205,7 +224,9 @@ export default function SchoolAdminPortalLayout({
           </div>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">{children}</main>
+        <main className="portal-main-frame flex-1 overflow-y-auto p-4 lg:p-6">
+          <div className="portal-main-inner">{children}</div>
+        </main>
       </div>
     </div>
   );

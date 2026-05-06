@@ -70,10 +70,20 @@ function App() {
   // Don't render routes while checking authentication
   if (checking) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gray-100">
-        <div className="text-center">
-          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-          <p className="mt-4 text-gray-600">Loading...</p>
+      <div className="app-loading-shell">
+        <div className="app-loading-floaters" aria-hidden="true">
+          <div className="app-loading-floater app-loading-floater-a">🧸</div>
+          <div className="app-loading-floater app-loading-floater-b">🎈</div>
+          <div className="app-loading-floater app-loading-floater-c">🌈</div>
+          <div className="app-loading-floater app-loading-floater-d">🖍️</div>
+        </div>
+        <div className="app-loading-card">
+          <div className="mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-600 via-sky-600 to-orange-400 text-xl font-bold text-white shadow-lg">
+            KC
+          </div>
+          <div className="app-loading-ring"></div>
+          <p className="mt-5 text-lg font-semibold text-slate-800">Preparing your kinder world</p>
+          <p className="mt-2 text-sm text-slate-500">Bringing classrooms, updates, and smiles into place.</p>
         </div>
       </div>
     );

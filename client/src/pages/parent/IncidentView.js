@@ -128,6 +128,16 @@ const IncidentView = () => {
                         <div className="flex flex-wrap items-center gap-2 mb-1.5">
                           <span className={`rounded-full px-3 py-0.5 text-xs font-bold ${c.badge}`}>{sev.label}</span>
                           <span className="text-sm font-bold text-slate-800">{incident.incidentType}</span>
+                          {incident.escalationLevel && incident.escalationLevel !== 'none' && (
+                            <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700">
+                              Escalated: {incident.escalationLevel}
+                            </span>
+                          )}
+                          {incident.escalationStatus && incident.escalationLevel && incident.escalationLevel !== 'none' && (
+                            <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-violet-100 text-violet-700">
+                              {incident.escalationStatus.replace('_', ' ')}
+                            </span>
+                          )}
                           {incident.parentNotified && (
                             <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 flex items-center gap-1">
                               <FaCheckCircle size={9} /> School Notified You

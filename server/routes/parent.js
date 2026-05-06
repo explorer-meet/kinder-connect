@@ -5,6 +5,56 @@ const { getPublicVapidKey, upsertPushSubscription, removePushSubscription } = re
 
 const router = express.Router();
 
+const RATING_TO_SCORE = {
+  emerging: 1,
+  developing: 2,
+  proficient: 3,
+  advanced: 4,
+};
+
+const INTAKE_TO_TEXT = {
+  full: 'ate well',
+  half: 'ate part of the meal',
+  refused: 'refused most of the meal',
+};
+
+const statusText = (status) => {
+  if (!status) return 'attendance was not marked';
+  if (status === 'present') return 'was present';
+  if (status === 'late') return 'arrived late';
+  if (status === 'half_day') return 'attended for half day';
+  return 'was absent';
+};
+
+const buildSmartSummary = ({ studentFirstName, attendance, meal, nap, teacherNote, incidentCount, topMood }) => {
+  const bits = [];
+  bits.push(`${studentFirstName} ${statusText(attendance?.status)} today.`);
+
+  if (meal?.intakeLevel) {
+    bits.push(`${studentFirstName} ${INTAKE_TO_TEXT[meal.intakeLevel] || 'had a meal update'}.`);
+  } else if (meal?.mealType) {
+    bits.push(`${meal.mealType[0].toUpperCase()}${meal.mealType.slice(1)} was logged.`);
+  }
+
+  if (nap?.duration) {
+    bits.push(`Nap duration was ${nap.duration} minutes.`);
+  }
+
+  if (topMood) {
+    bits.push(`Most observed mood: ${topMood}.`);
+  }
+
+  if (incidentCount > 0) {
+    bits.push(`There ${incidentCount === 1 ? 'was 1 incident' : `were ${incidentCount} incidents`} logged.`);
+  }
+
+  if (teacherNote?.text) {
+    bits.push(`Teacher note: ${teacherNote.text}`);
+  }
+
+  return bits.join(' ').trim();
+};
+
 // GET parent's children
 router.get('/children', auth, authorize(['parent']), async (req, res) => {
   try {
@@ -69,7 +119,7 @@ router.get('/child/:studentId/digest', auth, authorize(['parent']), async (req, 
     const nextDate = new Date(requestedDate);
     nextDate.setDate(nextDate.getDate() + 1);
 
-    const [attendance, activities] = await Promise.all([
+    const [attendance, activities, incidentStats] = await Promise.all([
       queryOne('SELECT * FROM attendance WHERE studentId = ? AND date >= ? AND date < ? LIMIT 1', [req.params.studentId, requestedDate, nextDate]),
       query(
         `SELECT a.*, u.firstName AS teacherFirstName, u.lastName AS teacherLastName
@@ -80,12 +130,19 @@ router.get('/child/:studentId/digest', auth, authorize(['parent']), async (req, 
          ORDER BY a.createdAt DESC`,
         [requestedDate, nextDate, req.params.studentId, student.batchId]
       ),
+      queryOne('SELECT COUNT(*) AS cnt FROM incidentreport WHERE studentId = ? AND incidentTime >= ? AND incidentTime < ?', [req.params.studentId, requestedDate, nextDate]),
     ]);
 
     const mealLog = activities.find((a) => a.mealType || a.intakeLevel || a.foodItems);
     const napLog = activities.find((a) => a.napStartTime || a.napEndTime || a.napDuration);
     const photoLog = activities.find((a) => a.mediaUrl);
     const noteLog = activities.find((a) => a.notes || a.description || a.caption || a.activityType === 'class_note');
+    const moodCounts = {};
+    activities.forEach((a) => {
+      const mood = a.moodAtArrival || a.moodAtDeparture;
+      if (mood) moodCounts[mood] = (moodCounts[mood] || 0) + 1;
+    });
+    const topMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
 
     const digest = {
       student: { id: student.id, firstName: student.firstName, lastName: student.lastName },
@@ -128,10 +185,173 @@ router.get('/child/:studentId/digest', auth, authorize(['parent']), async (req, 
           createdAt: noteLog.createdAt,
         }
         : null,
+      smartSummary: buildSmartSummary({
+        studentFirstName: student.firstName,
+        attendance,
+        meal: mealLog ? { intakeLevel: mealLog.intakeLevel, mealType: mealLog.mealType } : null,
+        nap: napLog ? { duration: napLog.napDuration } : null,
+        teacherNote: noteLog ? { text: noteLog.notes || noteLog.description || noteLog.caption || null } : null,
+        incidentCount: incidentStats?.cnt || 0,
+        topMood,
+      }),
+      quickInsights: {
+        incidentCount: incidentStats?.cnt || 0,
+        topMood,
+        activityCount: activities.length,
+      },
     };
 
     res.json(digest);
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// GET child progress insights timeline
+router.get('/child/:studentId/progress-insights', auth, authorize(['parent']), async (req, res) => {
+  try {
+    const student = await queryOne('SELECT id, firstName, lastName, parentIds FROM student WHERE id = ? LIMIT 1', [req.params.studentId]);
+    if (!student) return res.status(404).json({ error: 'Student not found' });
+
+    const parentIds = parseJ(student.parentIds) || [];
+    if (!parentIds.includes(req.userId)) return res.status(403).json({ error: 'Not authorized' });
+
+    const months = Math.max(3, Math.min(parseInt(req.query.months, 10) || 6, 12));
+    const fromDate = new Date();
+    fromDate.setDate(1);
+    fromDate.setMonth(fromDate.getMonth() - (months - 1));
+    fromDate.setHours(0, 0, 0, 0);
+
+    const [reports, attendanceAgg, incidentsAgg, milestonesAgg] = await Promise.all([
+      query(
+        `SELECT month, year, domains
+         FROM report
+         WHERE studentId = ?
+           AND reportStatus IN ('completed', 'sent_to_parent')
+           AND STR_TO_DATE(CONCAT(year, '-', month, '-01'), '%Y-%m-%d') >= ?
+         ORDER BY year ASC, month ASC`,
+        [req.params.studentId, fromDate]
+      ),
+      query(
+        `SELECT YEAR(date) AS year, MONTH(date) AS month,
+                COUNT(*) AS totalDays,
+                SUM(CASE WHEN status IN ('present','late','half_day') THEN 1 ELSE 0 END) AS presentDays
+         FROM attendance
+         WHERE studentId = ? AND date >= ?
+         GROUP BY YEAR(date), MONTH(date)
+         ORDER BY YEAR(date), MONTH(date)`,
+        [req.params.studentId, fromDate]
+      ),
+      query(
+        `SELECT YEAR(incidentTime) AS year, MONTH(incidentTime) AS month, COUNT(*) AS incidents
+         FROM incidentreport
+         WHERE studentId = ? AND incidentTime >= ?
+         GROUP BY YEAR(incidentTime), MONTH(incidentTime)
+         ORDER BY YEAR(incidentTime), MONTH(incidentTime)`,
+        [req.params.studentId, fromDate]
+      ),
+      query(
+        `SELECT YEAR(COALESCE(achievedDate, createdAt)) AS year, MONTH(COALESCE(achievedDate, createdAt)) AS month,
+                SUM(CASE WHEN isAchieved = 1 THEN 1 ELSE 0 END) AS achieved
+         FROM milestone
+         WHERE studentId = ? AND COALESCE(achievedDate, createdAt) >= ?
+         GROUP BY YEAR(COALESCE(achievedDate, createdAt)), MONTH(COALESCE(achievedDate, createdAt))
+         ORDER BY YEAR(COALESCE(achievedDate, createdAt)), MONTH(COALESCE(achievedDate, createdAt))`,
+        [req.params.studentId, fromDate]
+      ),
+    ]);
+
+    const reportMap = {};
+    reports.forEach((r) => {
+      const key = `${r.year}-${String(r.month).padStart(2, '0')}`;
+      const domains = parseJ(r.domains) || [];
+      const domainScores = {};
+      const values = domains
+        .map((d) => {
+          const score = RATING_TO_SCORE[String(d.rating || '').toLowerCase()] || null;
+          if (score) domainScores[d.domain] = score;
+          return score;
+        })
+        .filter(Boolean);
+      reportMap[key] = {
+        avgDomainScore: values.length ? Number((values.reduce((s, v) => s + v, 0) / values.length).toFixed(2)) : null,
+        domainScores,
+      };
+    });
+
+    const attendanceMap = Object.fromEntries(attendanceAgg.map((a) => {
+      const pct = a.totalDays ? Math.round((a.presentDays / a.totalDays) * 100) : 0;
+      return [`${a.year}-${String(a.month).padStart(2, '0')}`, { attendancePct: pct, totalDays: a.totalDays }];
+    }));
+    const incidentMap = Object.fromEntries(incidentsAgg.map((i) => [`${i.year}-${String(i.month).padStart(2, '0')}`, Number(i.incidents || 0)]));
+    const milestoneMap = Object.fromEntries(milestonesAgg.map((m) => [`${m.year}-${String(m.month).padStart(2, '0')}`, Number(m.achieved || 0)]));
+
+    const timeline = [];
+    const cursor = new Date(fromDate);
+    for (let i = 0; i < months; i += 1) {
+      const y = cursor.getFullYear();
+      const m = cursor.getMonth() + 1;
+      const key = `${y}-${String(m).padStart(2, '0')}`;
+      timeline.push({
+        key,
+        year: y,
+        month: m,
+        avgDomainScore: reportMap[key]?.avgDomainScore ?? null,
+        domainScores: reportMap[key]?.domainScores || {},
+        attendancePct: attendanceMap[key]?.attendancePct ?? null,
+        incidents: incidentMap[key] || 0,
+        achievedMilestones: milestoneMap[key] || 0,
+      });
+      cursor.setMonth(cursor.getMonth() + 1);
+    }
+
+    const domainSeries = {
+      social: timeline.map((t) => t.domainScores.social ?? null),
+      emotional: timeline.map((t) => t.domainScores.emotional ?? null),
+      motor: timeline.map((t) => t.domainScores.motor ?? null),
+      language: timeline.map((t) => t.domainScores.language ?? null),
+      cognitive: timeline.map((t) => t.domainScores.cognitive ?? null),
+    };
+
+    const domainAverage = (series) => {
+      const vals = series.filter(Boolean);
+      return vals.length ? Number((vals.reduce((s, v) => s + v, 0) / vals.length).toFixed(2)) : null;
+    };
+
+    const reportScores = timeline.map((t) => t.avgDomainScore).filter(Boolean);
+    const scoreTrend = reportScores.length >= 2
+      ? Number((reportScores[reportScores.length - 1] - reportScores[0]).toFixed(2))
+      : 0;
+
+    const attendanceVals = timeline.map((t) => t.attendancePct).filter((v) => Number.isInteger(v));
+    const avgAttendance = attendanceVals.length
+      ? Math.round(attendanceVals.reduce((s, v) => s + v, 0) / attendanceVals.length)
+      : null;
+
+    const totalIncidents = timeline.reduce((s, t) => s + (t.incidents || 0), 0);
+
+    res.json({
+      student: { id: student.id, firstName: student.firstName, lastName: student.lastName },
+      months,
+      timeline,
+      trendSummary: {
+        scoreTrend,
+        avgAttendance,
+        totalIncidents,
+        strongestDomain: Object.entries(domainSeries)
+          .map(([domain, series]) => ({ domain, avg: domainAverage(series) }))
+          .filter((d) => d.avg)
+          .sort((a, b) => b.avg - a.avg)[0]?.domain || null,
+        watchDomain: Object.entries(domainSeries)
+          .map(([domain, series]) => ({ domain, avg: domainAverage(series) }))
+          .filter((d) => d.avg)
+          .sort((a, b) => a.avg - b.avg)[0]?.domain || null,
+      },
+      scale: {
+        domainScore: { min: 1, max: 4 },
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // GET monthly development report

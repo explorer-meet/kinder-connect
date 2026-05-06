@@ -72,6 +72,12 @@ const ACCENTS = {
   },
 };
 
+const FAMILY_PILLS = [
+  { emoji: '🍼', label: 'Daily care' },
+  { emoji: '🌟', label: 'Tiny wins' },
+  { emoji: '🎨', label: 'Joyful updates' },
+];
+
 export default function ParentPortalLayout({ title, subtitle, accent = 'blue', rightAction, children }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -142,11 +148,16 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden">
+    <div className="portal-shell flex h-screen overflow-hidden">
+      <div className="portal-sprinkles hidden lg:block" aria-hidden="true">
+        <div className="portal-sprinkle portal-sprinkle-1"><span>🫶</span><span>Parent peace</span></div>
+        <div className="portal-sprinkle portal-sprinkle-2"><span>🧃</span><span>Little moments</span></div>
+        <div className="portal-sprinkle portal-sprinkle-3"><span>🌤️</span><span>Calm updates</span></div>
+      </div>
       {sidebarOpen && <div className="fixed inset-0 z-30 bg-slate-950/45 lg:hidden" onClick={() => setSidebarOpen(false)} />}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-[280px] bg-white shadow-xl flex flex-col transform transition-transform duration-300 ${
+        className={`fixed inset-y-0 left-0 z-40 w-[280px] bg-white/88 backdrop-blur-xl shadow-xl flex flex-col transform transition-transform duration-300 ${
           sidebarOpen ? 'translate-x-0' : '-translate-x-full'
         } lg:relative lg:translate-x-0 lg:shadow-none lg:border-r lg:border-slate-200`}
       >
@@ -178,6 +189,11 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
                 <p className="text-white/80 text-xs capitalize mt-1">{user?.role?.replace('_', ' ')}</p>
               </div>
             </div>
+          </div>
+          <div className="portal-emoji-row mt-3">
+            {FAMILY_PILLS.map((pill) => (
+              <span key={pill.label} className="portal-emoji-pill"><span>{pill.emoji}</span><span>{pill.label}</span></span>
+            ))}
           </div>
         </div>
 
@@ -219,7 +235,7 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
       </aside>
 
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        <header className="bg-white/95 backdrop-blur border-b border-slate-200 px-4 py-3 flex items-center gap-3 shrink-0">
+        <header className="portal-header-glass px-4 py-3 flex items-center gap-3 shrink-0">
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-slate-500 hover:text-slate-700 p-1">
             <FaBars size={18} />
           </button>
@@ -230,6 +246,7 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
             <h1 className="font-bold text-slate-900 text-base sm:text-lg truncate">{title}</h1>
             <p className="text-xs sm:text-sm text-slate-500 truncate mt-0.5">{subtitle || tagline}</p>
           </div>
+          <div className="hidden md:inline-flex portal-hero-chip"><span>🧸</span><span>Closer to your child's day</span></div>
           {rightAction && (
             <button
               onClick={rightAction.onClick}
@@ -240,12 +257,14 @@ export default function ParentPortalLayout({ title, subtitle, accent = 'blue', r
           )}
         </header>
 
-        <main className="flex-1 overflow-y-auto p-4 lg:p-6">
+        <main className="portal-main-frame flex-1 overflow-y-auto p-4 lg:p-6">
+          <div className="portal-main-inner">
           <div className={`rounded-3xl border px-5 py-5 mb-5 ${theme.soft}`}>
             <p className="text-lg font-bold">{title}</p>
             {subtitle && <p className="text-sm mt-1 opacity-90">{subtitle}</p>}
           </div>
           {children}
+          </div>
         </main>
       </div>
     </div>

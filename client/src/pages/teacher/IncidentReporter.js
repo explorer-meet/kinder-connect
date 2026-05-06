@@ -31,6 +31,7 @@ const IncidentReporter = () => {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [escalatingId, setEscalatingId] = useState('');
   const [message, setMessage] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [filterSeverity, setFilterSeverity] = useState('');
@@ -156,6 +157,24 @@ const IncidentReporter = () => {
       showMsg('success', 'Incident deleted');
     } catch {
       showMsg('error', 'Failed to delete');
+    }
+  };
+
+  const escalateIncident = async (incident) => {
+    try {
+      setEscalatingId(incident.id);
+      await api.post(`/teacher/incident/${incident.id}/escalate`, {
+        escalationLevel: incident.severity === 'severe' ? 'high' : 'medium',
+        escalationNotes: 'Escalated by teacher from incident board',
+      });
+      showMsg('success', 'Incident escalated');
+      setIncidents((prev) => prev.map((i) => (i.id === incident.id
+        ? { ...i, escalationLevel: incident.severity === 'severe' ? 'high' : 'medium', escalationStatus: 'in_progress' }
+        : i)));
+    } catch {
+      showMsg('error', 'Failed to escalate incident');
+    } finally {
+      setEscalatingId('');
     }
   };
 
@@ -382,6 +401,16 @@ const IncidentReporter = () => {
                     <div className="flex flex-wrap items-center gap-2 mb-1">
                       <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.badge}`}>{sev.label}</span>
                       <span className="text-xs font-semibold text-slate-700">{incident.incidentType}</span>
+                      {incident.escalationLevel && incident.escalationLevel !== 'none' && (
+                        <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-amber-100 text-amber-700">
+                          Escalated: {incident.escalationLevel}
+                        </span>
+                      )}
+                      {incident.escalationStatus && incident.escalationLevel && incident.escalationLevel !== 'none' && (
+                        <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-violet-100 text-violet-700">
+                          {incident.escalationStatus.replace('_', ' ')}
+                        </span>
+                      )}
                       {incident.parentNotified && (
                         <span className="rounded-full px-2.5 py-0.5 text-xs font-semibold bg-blue-100 text-blue-700 flex items-center gap-1">
                           <FaBell size={9} /> Parent Notified
@@ -412,6 +441,15 @@ const IncidentReporter = () => {
                     >
                       <FaTrash size={10} />
                     </button>
+                    {(!incident.escalationLevel || incident.escalationLevel === 'none') && (
+                      <button
+                        onClick={() => escalateIncident(incident)}
+                        disabled={escalatingId === incident.id}
+                        className="rounded-xl px-3 py-1.5 text-xs font-semibold border border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 transition disabled:opacity-60"
+                      >
+                        {escalatingId === incident.id ? 'Escalating...' : 'Escalate'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

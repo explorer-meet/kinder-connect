@@ -6,6 +6,12 @@ const { notifyParentsForActivity } = require('../src/lib/push');
 
 const router = express.Router();
 
+const escalationBySeverity = (severity) => {
+  if (severity === 'severe') return 'high';
+  if (severity === 'moderate') return 'medium';
+  return 'none';
+};
+
 // ===== Teacher Profile =====
 
 router.get('/profile', auth, authorize(['teacher']), async (req, res) => {
@@ -347,8 +353,13 @@ router.post('/incident', auth, authorize(['teacher']), async (req, res) => {
     const { studentId, batchId, incidentType, description, severity, actionTaken, incidentTime } = req.body;
     if (!studentId || !batchId || !incidentType || !description) return res.status(400).json({ error: 'studentId, batchId, incidentType and description are required' });
     const id = newId();
-    await query('INSERT INTO incidentreport (id, studentId, batchId, teacherId, incidentType, description, severity, actionTaken, parentNotified, incidentTime, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, NOW(), NOW())',
-      [id, studentId, batchId, req.userId, incidentType, description, severity || 'minor', actionTaken || null, incidentTime ? new Date(incidentTime) : new Date()]);
+    const normalizedSeverity = severity || 'minor';
+    const escalationLevel = escalationBySeverity(normalizedSeverity);
+    const escalationStatus = escalationLevel === 'none' ? 'open' : 'in_progress';
+    await query(
+      'INSERT INTO incidentreport (id, studentId, batchId, teacherId, incidentType, description, severity, actionTaken, parentNotified, incidentTime, escalationLevel, escalationStatus, escalatedAt, escalatedById, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, NOW(), NOW())',
+      [id, studentId, batchId, req.userId, incidentType, description, normalizedSeverity, actionTaken || null, incidentTime ? new Date(incidentTime) : new Date(), escalationLevel, escalationStatus, escalationLevel === 'none' ? null : new Date(), escalationLevel === 'none' ? null : req.userId]
+    );
     const incident = await queryOne('SELECT * FROM incidentreport WHERE id = ?', [id]);
     res.status(201).json({ message: 'Incident report created', incident });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -356,12 +367,26 @@ router.post('/incident', auth, authorize(['teacher']), async (req, res) => {
 
 router.patch('/incident/:id', auth, authorize(['teacher']), async (req, res) => {
   try {
-    const { actionTaken, followUpRequired, followUpNotes, parentNotified } = req.body;
+    const { actionTaken, followUpRequired, followUpNotes, parentNotified, escalationLevel, escalationStatus, escalationNotes, resolutionSummary } = req.body;
     const sets = [], vals = [];
     if (actionTaken !== undefined)     { sets.push('actionTaken = ?');    vals.push(actionTaken); }
     if (followUpRequired !== undefined){ sets.push('followUpRequired = ?'); vals.push(followUpRequired ? 1 : 0); }
     if (followUpNotes !== undefined)   { sets.push('followUpNotes = ?');   vals.push(followUpNotes); }
     if (parentNotified !== undefined)  { sets.push('parentNotified = ?', 'parentNotificationTime = ?'); vals.push(parentNotified ? 1 : 0, parentNotified ? new Date() : null); }
+    if (escalationLevel !== undefined) {
+      sets.push('escalationLevel = ?', 'escalationStatus = ?', 'escalatedAt = ?', 'escalatedById = ?');
+      vals.push(escalationLevel, escalationLevel === 'none' ? 'open' : 'in_progress', escalationLevel === 'none' ? null : new Date(), escalationLevel === 'none' ? null : req.userId);
+    }
+    if (escalationStatus !== undefined) {
+      sets.push('escalationStatus = ?');
+      vals.push(escalationStatus);
+      if (escalationStatus === 'resolved') {
+        sets.push('resolvedAt = ?');
+        vals.push(new Date());
+      }
+    }
+    if (escalationNotes !== undefined)  { sets.push('escalationNotes = ?'); vals.push(escalationNotes); }
+    if (resolutionSummary !== undefined){ sets.push('resolutionSummary = ?'); vals.push(resolutionSummary); }
     if (!sets.length) return res.status(400).json({ error: 'No fields to update' });
     sets.push('updatedAt = NOW()');
     vals.push(req.params.id);
@@ -369,6 +394,22 @@ router.patch('/incident/:id', auth, authorize(['teacher']), async (req, res) => 
     const updated = await queryOne('SELECT * FROM incidentreport WHERE id = ?', [req.params.id]);
     res.json({ message: 'Incident updated', incident: updated });
   } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+router.post('/incident/:id/escalate', auth, authorize(['teacher']), async (req, res) => {
+  try {
+    const { escalationLevel, escalationNotes } = req.body;
+    const level = escalationLevel || 'high';
+    await query(
+      'UPDATE incidentreport SET escalationLevel = ?, escalationStatus = ?, escalationNotes = ?, escalatedAt = NOW(), escalatedById = ?, updatedAt = NOW() WHERE id = ?',
+      [level, 'in_progress', escalationNotes || null, req.userId, req.params.id]
+    );
+    const incident = await queryOne('SELECT * FROM incidentreport WHERE id = ? LIMIT 1', [req.params.id]);
+    if (!incident) return res.status(404).json({ error: 'Incident not found' });
+    res.json({ message: 'Incident escalated', incident });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 router.delete('/incident/:id', auth, authorize(['teacher']), async (req, res) => {
